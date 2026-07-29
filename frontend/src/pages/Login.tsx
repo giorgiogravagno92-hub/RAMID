@@ -34,6 +34,7 @@ const findRegionByProvince = (provinceName: string): string => {
 
 export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
+  const [verificationEmailSentTo, setVerificationEmailSentTo] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState(initialRole);
@@ -110,7 +111,11 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
         }
         
         const res = await api.auth.register({ email, password, role, profileData });
-        onLoginSuccess(res.user, res.token);
+        if (res && res.emailVerificationRequired) {
+          setVerificationEmailSentTo(res.email);
+        } else {
+          onLoginSuccess(res.user, res.token);
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Errore durante l\'autenticazione');
@@ -155,185 +160,226 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
             ⚠️ {error}
           </div>
         )}
-
         {/* Form */}
-        <form onSubmit={handleSubmit}>
-          {!isLogin && role === 'WORKER' && (
-            <div className="form-control-row" style={{ marginBottom: '20px' }}>
-              <div>
-                <label className="form-label">Nome *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={firstName} 
-                  onChange={(e) => setFirstName(e.target.value)} 
-                  required 
-                />
-              </div>
-              <div>
-                <label className="form-label">Cognome *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={lastName} 
-                  onChange={(e) => setLastName(e.target.value)} 
-                  required 
-                />
-              </div>
+        {verificationEmailSentTo ? (
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📧</div>
+            <h3 style={{ marginBottom: '12px', color: '#fff' }}>Verifica il tuo Account</h3>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.5' }}>
+              Abbiamo inviato un link di autorizzazione all'indirizzo email <strong style={{ color: 'var(--accent-blue)' }}>{verificationEmailSentTo}</strong>.
+              Clicca sul link per confermare la registrazione e attivare il tuo profilo.
+            </p>
+            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px dashed var(--border-glass)', marginBottom: '24px' }}>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                [Simulatore di posta elettronica]
+              </p>
+              <a 
+                href={`http://localhost:5000/api/auth/verify-email?email=${encodeURIComponent(verificationEmailSentTo)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary"
+                style={{ display: 'inline-block', width: '100%', fontSize: '0.85rem', textDecoration: 'none', textAlign: 'center', boxSizing: 'border-box' }}
+                onClick={() => {
+                  setTimeout(() => {
+                    setVerificationEmailSentTo(null);
+                    setIsLogin(true);
+                    setError('');
+                  }, 2000);
+                }}
+              >
+                Clicca qui per simulare l'autorizzazione 🔗
+              </a>
             </div>
-          )}
-
-          {!isLogin && role === 'COMPANY' && (
-            <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Nome azienda</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={companyName} 
-                  onChange={(e) => setCompanyName(formatCapitalizedWords(e.target.value))} 
-                  required 
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Indirizzo sede operativa</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={address} 
-                  onChange={(e) => setAddress(formatCapitalizedWords(e.target.value))} 
-                  required 
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '10px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Città</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    value={city} 
-                    onChange={(e) => setCity(formatCapitalizedWords(e.target.value))} 
-                    required 
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Provincia</label>
-                  <select 
-                    className="form-control" 
-                    value={province} 
-                    onChange={(e) => {
-                      const p = e.target.value;
-                      setProvince(p);
-                      setSigla(PROVINCE_SIGLE[p] || '');
-                    }}
-                    required
-                  >
-                    <option value="">-- Seleziona --</option>
-                    {CITIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Sigla</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    value={sigla} 
-                    readOnly 
-                    disabled
-                    style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
-                    placeholder="Auto"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Settore operativo</label>
-                <select 
-                  className="form-control" 
-                  value={sector} 
-                  onChange={(e) => setSector(e.target.value)}
-                  required
-                >
-                  <option value="">-- Seleziona Settore Operativo --</option>
-                  {COMPANY_SECTORS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          <div className="form-group">
-            <label className="form-label">Indirizzo Email</label>
-            <input 
-              type="email" 
-              className="form-control" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              placeholder="es. nome@email.it"
-              required 
-            />
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              style={{ width: '100%' }}
+              onClick={() => {
+                setVerificationEmailSentTo(null);
+                setIsLogin(true);
+                setError('');
+              }}
+            >
+              Torna al Login
+            </button>
           </div>
+        ) : (
+          <>
+            <form onSubmit={handleSubmit}>
+              {!isLogin && role === 'WORKER' && (
+                <div className="form-control-row" style={{ marginBottom: '20px' }}>
+                  <div>
+                    <label className="form-label">Nome *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={firstName} 
+                      onChange={(e) => setFirstName(formatCapitalizedWords(e.target.value))} 
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Cognome *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={lastName} 
+                      onChange={(e) => setLastName(formatCapitalizedWords(e.target.value))} 
+                      required 
+                    />
+                  </div>
+                </div>
+              )}
 
-          <div className="form-group" style={{ marginBottom: isLogin ? '20px' : '10px' }}>
-            <label className="form-label">Password</label>
-            <input 
-              type="password" 
-              className="form-control" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              placeholder="••••••••"
-              required 
-            />
-            {!isLogin && (
-              <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: '1.3' }}>
-                🔒 La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.
+              {!isLogin && role === 'COMPANY' && (
+                <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Nome azienda</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={companyName} 
+                      onChange={(e) => setCompanyName(formatCapitalizedWords(e.target.value))} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Indirizzo sede operativa</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={address} 
+                      onChange={(e) => setAddress(formatCapitalizedWords(e.target.value))} 
+                      required 
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '10px' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Città</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={city} 
+                        onChange={(e) => setCity(formatCapitalizedWords(e.target.value))} 
+                        required 
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Provincia</label>
+                      <select 
+                        className="form-control" 
+                        value={province} 
+                        onChange={(e) => {
+                          const provVal = e.target.value;
+                          setProvince(provVal);
+                          setSigla(PROVINCE_SIGLE[provVal] || '');
+                        }}
+                        required
+                      >
+                        <option value="">Provincia</option>
+                        {CITIES.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Sigla</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={sigla} 
+                        readOnly 
+                        style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'center' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Settore Operativo</label>
+                    <select 
+                      className="form-control" 
+                      value={sector} 
+                      onChange={(e) => setSector(e.target.value)} 
+                      required
+                    >
+                      <option value="">-- Seleziona Settore --</option>
+                      {COMPANY_SECTORS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Indirizzo Email</label>
+                <input 
+                  type="email" 
+                  className="form-control" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="es. nome@email.it"
+                  required 
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: isLogin ? '20px' : '10px' }}>
+                <label className="form-label">Password</label>
+                <input 
+                  type="password" 
+                  className="form-control" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder="••••••••"
+                  required 
+                />
+                {!isLogin && (
+                  <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: '1.3' }}>
+                    🔒 La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.
+                  </span>
+                )}
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                style={{ width: '100%', padding: '14px', marginTop: '10px' }}
+                disabled={loading}
+              >
+                {loading ? 'Elaborazione in corso...' : (isLogin ? 'Accedi' : 'Completa Registrazione')}
+              </button>
+            </form>
+
+            {/* Social Authentication */}
+            <div style={{ margin: '24px 0', textAlign: 'center', position: 'relative' }}>
+              <hr style={{ border: '0', borderTop: '1px solid var(--border-glass)' }} />
+              <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'var(--bg-secondary)', padding: '0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                OPPURE ACCEDI CON
               </span>
-            )}
-          </div>
+            </div>
 
-          <button 
-            type="submit" 
-            className="btn btn-primary" 
-            style={{ width: '100%', padding: '14px', marginTop: '10px' }}
-            disabled={loading}
-          >
-            {loading ? 'Elaborazione in corso...' : (isLogin ? 'Accedi' : 'Completa Registrazione')}
-          </button>
-        </form>
-
-        {/* Social Authentication */}
-        <div style={{ margin: '24px 0', textAlign: 'center', position: 'relative' }}>
-          <hr style={{ border: '0', borderTop: '1px solid var(--border-glass)' }} />
-          <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'var(--bg-secondary)', padding: '0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            OPPURE ACCEDI CON
-          </span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <button 
-            className="btn btn-secondary" 
-            style={{ padding: '10px' }}
-            onClick={() => handleSocialLogin('google')}
-            disabled={loading}
-          >
-            🌐 Google
-          </button>
-          <button 
-            className="btn btn-secondary" 
-            style={{ padding: '10px' }}
-            onClick={() => handleSocialLogin('apple')}
-            disabled={loading}
-          >
-            🍎 Apple ID
-          </button>
-        </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: '10px' }}
+                onClick={() => handleSocialLogin('google')}
+                disabled={loading}
+              >
+                🌐 Google
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: '10px' }}
+                onClick={() => handleSocialLogin('apple')}
+                disabled={loading}
+              >
+                🍎 Apple ID
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Toggle Account Type / Auth Mode */}
         <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.9rem' }}>

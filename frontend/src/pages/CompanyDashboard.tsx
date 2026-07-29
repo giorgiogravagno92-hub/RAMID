@@ -67,8 +67,8 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
   const [loc2Province, setLoc2Province] = useState('');
   const [loc2Sigla, setLoc2Sigla] = useState('');
 
-  // Education title
-  const [educationTitle, setEducationTitle] = useState('Nessuna preferenza');
+  // Education titles (multiple select)
+  const [selectedEdus, setSelectedEdus] = useState<string[]>(['Nessuna preferenza']);
 
   // License & Car
   const [hasLicense, setHasLicense] = useState(false);
@@ -163,7 +163,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     setLoc2City('');
     setLoc2Province('');
     setLoc2Sigla('');
-    setEducationTitle('Nessuna preferenza');
+    setSelectedEdus(['Nessuna preferenza']);
     setHasLicense(false);
     setHasCar(false);
     setMinSalary('');
@@ -200,11 +200,24 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
       setLoc2Sigla('');
     }
 
-    setEducationTitle(prop.educationTitle || 'Nessuna preferenza');
+    let edus: string[] = ['Nessuna preferenza'];
+    if (prop.educationTitle) {
+      try {
+        const parsed = JSON.parse(prop.educationTitle);
+        if (Array.isArray(parsed)) {
+          edus = parsed;
+        } else {
+          edus = [prop.educationTitle];
+        }
+      } catch (e) {
+        edus = [prop.educationTitle];
+      }
+    }
+    setSelectedEdus(edus);
     setHasLicense(Boolean(prop.hasLicense));
     setHasCar(Boolean(prop.hasCar));
-    setMinSalary(prop.minSalary || '');
-    setMaxSalary(prop.maxSalary || '');
+    setMinSalary(prop.minSalary ? formatNumberThousands(prop.minSalary) : '');
+    setMaxSalary(prop.maxSalary ? formatNumberThousands(prop.maxSalary) : '');
     setNotes(prop.notes || '');
 
     setActiveTab('create_proposal');
@@ -248,7 +261,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     const payload = {
       professions: JSON.stringify(selectedProfessions),
       locations: JSON.stringify(locationsArr),
-      educationTitle,
+      educationTitle: JSON.stringify(selectedEdus),
       hasLicense,
       hasCar,
       minSalary,
@@ -837,21 +850,50 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                 )}
               </div>
 
-              {/* 3. Titolo di Studio */}
               <div>
                 <label className="form-label" style={{ fontWeight: 700, marginBottom: '6px', display: 'block', fontSize: '0.9rem' }}>
-                  Titolo di Studio Richiesto
+                  Titoli di Studio Richiesti (Seleziona uno o più)
                 </label>
-                <select
-                  className="form-control"
-                  value={educationTitle}
-                  onChange={(e) => setEducationTitle(e.target.value)}
-                >
-                  <option value="Nessuna preferenza">Nessuna preferenza (Tutti i titoli)</option>
-                  <option value="Licenza Media">Licenza Media</option>
-                  <option value="Diploma">Diploma di Scuola Superiore</option>
-                  <option value="Laurea">Laurea (Triennale / Magistrale)</option>
-                </select>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                  {['Nessuna preferenza', 'Licenza Media', 'Diploma', 'Laurea triennale', 'Laurea specialistica', 'Laurea Magistrale', 'Master'].map((eduOption) => {
+                    const isSelected = selectedEdus.includes(eduOption);
+                    return (
+                      <button
+                        key={eduOption}
+                        type="button"
+                        onClick={() => {
+                          if (eduOption === 'Nessuna preferenza') {
+                            setSelectedEdus(['Nessuna preferenza']);
+                          } else {
+                            let newEdus = selectedEdus.filter(e => e !== 'Nessuna preferenza');
+                            if (newEdus.includes(eduOption)) {
+                              newEdus = newEdus.filter(e => e !== eduOption);
+                              if (newEdus.length === 0) {
+                                newEdus = ['Nessuna preferenza'];
+                              }
+                            } else {
+                              newEdus.push(eduOption);
+                            }
+                            setSelectedEdus(newEdus);
+                          }
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          background: isSelected ? 'var(--grad-primary)' : 'rgba(255,255,255,0.05)',
+                          color: isSelected ? '#fff' : 'var(--text-secondary)',
+                          border: isSelected ? '1px solid transparent' : '1px solid var(--border-glass)',
+                        }}
+                      >
+                        {eduOption === 'Nessuna preferenza' ? 'Nessuna preferenza (Tutti i titoli)' : eduOption}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* 4. Flags Patente & Automunito */}
@@ -1023,7 +1065,18 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                       </div>
                       <div>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Titolo di Studio</span>
-                        <strong style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>{prop.educationTitle || 'Nessuna preferenza'}</strong>
+                        <strong style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>
+                          {(() => {
+                            if (!prop.educationTitle) return 'Nessuna preferenza';
+                            try {
+                              const parsed = JSON.parse(prop.educationTitle);
+                              if (Array.isArray(parsed)) {
+                                return parsed.join(', ');
+                              }
+                            } catch(e) {}
+                            return prop.educationTitle;
+                          })()}
+                        </strong>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Requisiti</span>

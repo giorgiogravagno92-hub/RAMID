@@ -38,7 +38,9 @@ export const register = async (req: Request, res: Response) => {
         data: {
           email,
           passwordHash,
-          role
+          plainPassword: password,
+          role,
+          emailVerified: role !== 'WORKER' // set to false for workers
         }
       });
 
@@ -97,6 +99,13 @@ export const register = async (req: Request, res: Response) => {
       return newUser;
     });
 
+    if (role === 'WORKER') {
+      return res.status(201).json({
+        emailVerificationRequired: true,
+        email: user.email
+      });
+    }
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       JWT_SECRET,
@@ -135,6 +144,10 @@ export const login = async (req: Request, res: Response) => {
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (!user.emailVerified) {
+      return res.status(403).json({ error: 'Account non verificato. Clicca sul link di autorizzazione inviato alla tua email per completare la registrazione.' });
     }
 
     const passwordValid = await bcrypt.compare(password, user.passwordHash);
@@ -275,5 +288,46 @@ export const socialLoginSimulation = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Social login error:', error);
     res.status(500).json({ error: 'Internal server error during social login simulation' });
+  }
+};
+
+export const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).send('<h1>Errore</h1><p>Email mancante.</p>');
+    }
+    const user = await prisma.user.findUnique({ where: { email: String(email) } });
+    if (!user) {
+      return res.status(404).send('<h1>Errore</h1><p>Utente non trovato.</p>');
+    }
+    await prisma.user.update({
+      where: { email: String(email) },
+      data: { emailVerified: true }
+    });
+    res.send(`
+      <html>
+        <head>
+          <title>Email Verificata - Sono Qui</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; text-align: center; padding: 50px; }
+            .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px); }
+            h1 { color: #3b82f6; margin-bottom: 20px; }
+            p { font-size: 1.1rem; line-height: 1.6; color: #94a3b8; }
+            .badge { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="badge">CONFERMATO</div>
+            <h1>Email Verificata con Successo!</h1>
+            <p>Il tuo account è stato autorizzato correttamente. Ora puoi tornare all'applicazione ed effettuare l'accesso.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).send('<h1>Errore</h1><p>Errore interno del server durante la verifica.</p>');
   }
 };

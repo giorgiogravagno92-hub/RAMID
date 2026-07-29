@@ -8,11 +8,13 @@ generator client {
 }
 
 model User {
-  id           String          @id @default(uuid())
-  email        String          @unique
-  passwordHash String
-  role         String          // "WORKER", "COMPANY", "ADMIN"
-  createdAt    DateTime        @default(now())
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  plainPassword String?
+  role          String          // "WORKER", "COMPANY", "ADMIN"
+  emailVerified Boolean         @default(true)
+  createdAt     DateTime        @default(now())
   workerProfile WorkerProfile?
   companyProfile CompanyProfile?
   notifications Notification[]

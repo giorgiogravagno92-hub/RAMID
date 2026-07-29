@@ -48,14 +48,14 @@ export const getStats = async (req: Request, res: Response) => {
 
 export const getUsers = async (req: Request, res: Response) => {
   try {
-    const workers = await prisma.workerProfile.findMany({
+    const users = await prisma.user.findMany({
       include: {
-        user: {
-          select: { email: true, createdAt: true }
-        }
-      }
+        workerProfile: true,
+        companyProfile: true
+      },
+      orderBy: { createdAt: 'desc' }
     });
-    res.json(workers);
+    res.json(users);
   } catch (error: any) {
     res.status(500).json({ error: 'Error fetching users list' });
   }

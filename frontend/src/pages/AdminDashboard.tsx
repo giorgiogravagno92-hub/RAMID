@@ -5,7 +5,8 @@ export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'users' | 'companies' | 'wp' | 'broadcast'>('stats');
+  const [allAccounts, setAllAccounts] = useState<any[]>([]);
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'users' | 'companies' | 'accounts' | 'wp' | 'broadcast'>('stats');
   
   // WordPress editing states
   const [wpPages, setWpPages] = useState<any>({});
@@ -48,9 +49,28 @@ export const AdminDashboard: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const u = await api.admin.getUsers();
-      setUsers(u);
-      const c = await api.admin.getCompanies();
-      setCompanies(c);
+      setAllAccounts(u || []);
+      
+      const workers = (u || []).filter((user: any) => user.role === 'WORKER').map((user: any) => ({
+        id: user.workerProfile?.id || user.id,
+        userId: user.id,
+        firstName: user.workerProfile?.firstName || 'Nuovo',
+        lastName: user.workerProfile?.lastName || 'Candidato',
+        profession: user.workerProfile?.profession || 'Non specificato',
+        city: user.workerProfile?.city || 'Non specificata',
+        availabilityStatus: user.workerProfile?.availabilityStatus || 'DISPONIBILE_PROPOSTE'
+      }));
+      setUsers(workers);
+
+      const recruiters = (u || []).filter((user: any) => user.role === 'COMPANY').map((user: any) => ({
+        id: user.companyProfile?.id || user.id,
+        userId: user.id,
+        companyName: user.companyProfile?.companyName || 'Nuova Azienda',
+        industry: user.companyProfile?.industry || 'Non specificato',
+        city: user.companyProfile?.city || 'Non specificata',
+        contactPerson: user.companyProfile?.contactPerson || 'Referente'
+      }));
+      setCompanies(recruiters);
     } catch (err) {
       console.error(err);
     }
@@ -178,6 +198,24 @@ export const AdminDashboard: React.FC = () => {
     if (confirm('Sei sicuro di voler eliminare questo utente? Tutti i suoi dati di profilo saranno rimossi.')) {
       try {
         await api.admin.deleteUser(id);
+        
+        // Check if self-deletion
+        const token = localStorage.getItem('sono_qui_token');
+        let currentUserId = '';
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            currentUserId = payload.id;
+          } catch (e) {}
+        }
+
+        if (id === currentUserId) {
+          alert('Hai eliminato il tuo account amministratore. Verrai disconnesso automaticamente.');
+          localStorage.removeItem('sono_qui_token');
+          window.location.href = '/';
+          return;
+        }
+
         fetchUsers();
         fetchStats();
       } catch (err) {
@@ -214,6 +252,13 @@ export const AdminDashboard: React.FC = () => {
           onClick={() => setActiveSubTab('companies')}
         >
           🏢 Gestione Aziende
+        </button>
+        <button 
+          className={`btn ${activeSubTab === 'accounts' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+          onClick={() => setActiveSubTab('accounts')}
+        >
+          🔑 Gestione Account
         </button>
         <button 
           className={`btn ${activeSubTab === 'wp' ? 'btn-primary' : 'btn-secondary'}`}
@@ -354,6 +399,75 @@ export const AdminDashboard: React.FC = () => {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Accounts Management Tab */}
+      {activeSubTab === 'accounts' && (
+        <div className="glass-card">
+          <h3 style={{ marginBottom: '8px' }}>Gestione Completa Account & Credenziali</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '24px' }}>
+            In questa sezione riservata puoi visualizzare tutti gli utenti registrati sul portale con le relative email e password in chiaro. Puoi anche cancellare qualsiasi utente (incluso te stesso).
+          </p>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Nome / Dettaglio</th>
+                <th>Email</th>
+                <th>Password (In Chiaro)</th>
+                <th>Ruolo</th>
+                <th>Stato</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allAccounts.map((acc: any) => {
+                const displayName = acc.role === 'WORKER' 
+                  ? `${acc.workerProfile?.firstName || ''} ${acc.workerProfile?.lastName || ''} (Candidato)`
+                  : acc.role === 'COMPANY' 
+                    ? `${acc.companyProfile?.companyName || 'Azienda'} (Recruiter)` 
+                    : 'Amministratore';
+                
+                return (
+                  <tr key={acc.id}>
+                    <td><strong>{displayName}</strong></td>
+                    <td><code>{acc.email}</code></td>
+                    <td>
+                      <span style={{ color: 'var(--accent-yellow)', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {acc.plainPassword || 'password123 (Seeded)'}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ 
+                        padding: '3px 8px', 
+                        borderRadius: '6px', 
+                        fontSize: '0.72rem', 
+                        fontWeight: 700,
+                        background: acc.role === 'ADMIN' ? 'rgba(239,68,68,0.15)' : (acc.role === 'COMPANY' ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)'),
+                        color: acc.role === 'ADMIN' ? 'var(--accent-red)' : (acc.role === 'COMPANY' ? 'var(--accent-blue)' : 'var(--accent-green)')
+                      }}>
+                        {acc.role}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.85rem' }}>
+                        {acc.emailVerified ? '🟢 Attivo' : '📧 In Attesa Verifica'}
+                      </span>
+                    </td>
+                    <td>
+                      <button 
+                        className="btn btn-danger" 
+                        style={{ padding: '6px 10px', fontSize: '0.75rem', fontWeight: 700 }} 
+                        onClick={() => handleDeleteUser(acc.id)}
+                      >
+                        Elimina
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

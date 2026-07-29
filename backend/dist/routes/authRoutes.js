@@ -6,6 +6,7 @@ const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.post('/register', authController_1.register);
 router.post('/login', authController_1.login);
+router.get('/verify-email', authController_1.verifyEmail);
 router.get('/me', auth_1.authenticateToken, authController_1.me);
 router.post('/social-login', authController_1.socialLoginSimulation);
 exports.default = router;

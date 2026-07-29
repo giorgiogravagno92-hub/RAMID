@@ -12,11 +12,16 @@ async function main() {
   // 1. Create Admin
   const admin = await prisma.user.upsert({
     where: { email: 'admin@sonoqui.it' },
-    update: {},
+    update: {
+      plainPassword: 'password123',
+      emailVerified: true
+    },
     create: {
       email: 'admin@sonoqui.it',
       passwordHash,
-      role: 'ADMIN'
+      plainPassword: 'password123',
+      role: 'ADMIN',
+      emailVerified: true
     }
   });
   console.log('Created Admin:', admin.email);
@@ -24,11 +29,16 @@ async function main() {
   // 2. Create Company
   const companyUser = await prisma.user.upsert({
     where: { email: 'azienda@innovate.it' },
-    update: {},
+    update: {
+      plainPassword: 'password123',
+      emailVerified: true
+    },
     create: {
       email: 'azienda@innovate.it',
       passwordHash,
-      role: 'COMPANY'
+      plainPassword: 'password123',
+      role: 'COMPANY',
+      emailVerified: true
     }
   });
 
@@ -215,11 +225,16 @@ async function main() {
   for (const data of workersData) {
     const user = await prisma.user.upsert({
       where: { email: data.email },
-      update: {},
+      update: {
+        plainPassword: 'password123',
+        emailVerified: true
+      },
       create: {
         email: data.email,
         passwordHash,
-        role: 'WORKER'
+        plainPassword: 'password123',
+        role: 'WORKER',
+        emailVerified: true
       }
     });
 
