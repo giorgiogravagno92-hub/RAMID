@@ -3,6 +3,56 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+const SIGLA_TO_PROVINCE: Record<string, string> = {
+  "AG": "Agrigento", "AL": "Alessandria", "AN": "Ancona", "AO": "Aosta", "AR": "Arezzo",
+  "AP": "Ascoli Piceno", "AT": "Asti", "AV": "Avellino", "BA": "Bari", "BT": "Barletta-Andria-Trani",
+  "BL": "Belluno", "BN": "Benevento", "BG": "Bergamo", "BI": "Biella", "BO": "Bologna",
+  "BZ": "Bolzano", "BS": "Brescia", "BR": "Brindisi", "CA": "Cagliari", "CL": "Caltanissetta",
+  "CB": "Campobasso", "CE": "Caserta", "CT": "Catania", "CZ": "Catanzaro", "CH": "Chieti",
+  "CO": "Como", "CS": "Cosenza", "CR": "Cremona", "KR": "Crotone", "CN": "Cuneo",
+  "EN": "Enna", "FM": "Fermo", "FE": "Ferrara", "FI": "Firenze", "FG": "Foggia",
+  "FC": "Forlì-Cesena", "FR": "Frosinone", "GE": "Genova", "GO": "Gorizia", "GR": "Grosseto",
+  "IM": "Imperia", "IS": "Isernia", "AQ": "L'Aquila", "SP": "La Spezia", "LT": "Latina",
+  "LE": "Lecce", "LC": "Lecco", "LI": "Livorno", "LO": "Lodi", "LU": "Lucca",
+  "MC": "Macerata", "MN": "Mantova", "MS": "Massa-Carrara", "MT": "Matera", "ME": "Messina",
+  "MI": "Milano", "MO": "Modena", "MB": "Monza e della Brianza", "NA": "Napoli", "NO": "Novara",
+  "NU": "Nuoro", "OR": "Oristano", "PD": "Padova", "PA": "Palermo", "PR": "Parma",
+  "PV": "Pavia", "PG": "Perugia", "PU": "Pesaro e Urbino", "PE": "Pescara", "PC": "Piacenza",
+  "PI": "Pisa", "PT": "Pistoia", "PN": "Pordenone", "PZ": "Potenza", "PO": "Prato",
+  "RG": "Ragusa", "RA": "Ravenna", "RC": "Reggio Calabria", "RE": "Reggio Emilia", "RI": "Rieti",
+  "RN": "Rimini", "RM": "Roma", "RO": "Rovigo", "SA": "Salerno", "SS": "Sassari",
+  "SV": "Savona", "SI": "Siena", "SR": "Siracusa", "SO": "Sondrio", "SU": "Sud Sardegna",
+  "TA": "Taranto", "TE": "Teramo", "TR": "Terni", "TO": "Torino", "TP": "Trapani",
+  "TN": "Trento", "TV": "Treviso", "TS": "Trieste", "UD": "Udine", "VA": "Varese",
+  "VE": "Venezia", "VB": "Verbano-Cusio-Ossola", "VC": "Vercelli", "VR": "Verona",
+  "VV": "Vibo Valentia", "VI": "Vicenza", "VT": "Viterbo"
+};
+
+const REGIONS_AND_PROVINCES: Record<string, string[]> = {
+  "Abruzzo": ["L'Aquila", "Chieti", "Pescara", "Teramo", "Tutte le province"],
+  "Basilicata": ["Matera", "Potenza", "Tutte le province"],
+  "Calabria": ["Catanzaro", "Cosenza", "Crotone", "Reggio Calabria", "Vibo Valentia", "Tutte le province"],
+  "Campania": ["Avellino", "Benevento", "Caserta", "Napoli", "Salerno", "Tutte le province"],
+  "Emilia-Romagna": ["Bologna", "Ferrara", "Forlì-Cesena", "Modena", "Parma", "Piacenza", "Ravenna", "Reggio Emilia", "Rimini", "Tutte le province"],
+  "Friuli Venezia Giulia": ["Gorizia", "Pordenone", "Trieste", "Udine", "Tutte le province"],
+  "Lazio": ["Frosinone", "Latina", "Rieti", "Roma", "Viterbo", "Tutte le province"],
+  "Liguria": ["Genova", "Imperia", "La Spezia", "Savona", "Tutte le province"],
+  "Lombardia": ["Bergamo", "Brescia", "Como", "Cremona", "Lecco", "Lodi", "Mantova", "Milano", "Monza e della Brianza", "Pavia", "Sondrio", "Varese", "Tutte le province"],
+  "Marche": ["Ancona", "Ascoli Piceno", "Fermo", "Macerata", "Pesaro e Urbino", "Tutte le province"],
+  "Molise": ["Campobasso", "Isernia", "Tutte le province"],
+  "Piemonte": ["Alessandria", "Asti", "Biella", "Cuneo", "Novara", "Torino", "Verbano-Cusio-Ossola", "Vercelli", "Tutte le province"],
+  "Puglia": ["Bari", "Barletta-Andria-Trani", "Brindisi", "Foggia", "Lecce", "Taranto", "Tutte le province"],
+  "Sardegna": ["Cagliari", "Nuoro", "Oristano", "Sassari", "Sud Sardegna", "Tutte le province"],
+  "Sicilia": ["Agrigento", "Caltanissetta", "Catania", "Enna", "Messina", "Palermo", "Ragusa", "Siracusa", "Trapani", "Tutte le province"],
+  "Toscana": ["Arezzo", "Firenze", "Grosseto", "Livorno", "Lucca", "Massa-Carrara", "Pisa", "Pistoia", "Prato", "Siena", "Tutte le province"],
+  "Trentino-Alto Adige/Südtirol": ["Bolzano", "Trento", "Tutte le province"],
+  "Umbria": ["Perugia", "Terni", "Tutte le province"],
+  "Valle d'Aosta/Vallée d'Aoste": ["Aosta", "Tutte le province"],
+  "Veneto": ["Belluno", "Padova", "Rovigo", "Treviso", "Venezia", "Verona", "Vicenza", "Tutte le province"],
+  "Tutte le regioni": []
+};
+
+
 export const getProfile = async (req: any, res: Response) => {
   try {
     const profile = await prisma.workerProfile.findUnique({
@@ -400,16 +450,73 @@ export const getProposalsForWorker = async (req: any, res: Response) => {
 
       // Location match
       let matchLoc = false;
-      if (locsArr.length === 0) matchLoc = true;
-      else {
-        matchLoc = locsArr.some(loc => {
+      if (locsArr.length === 0) {
+        matchLoc = true;
+      } else {
+        // 1. Check if matches candidate's primary residence
+        const matchesResidence = locsArr.some(loc => {
           if (loc.province === 'Tutto il territorio nazionale' || loc.city === 'Tutto il territorio nazionale') return true;
-          const wCity = (worker.city || '').toLowerCase();
-          const wProv = (worker.province || '').toLowerCase();
-          const lCity = (loc.city || '').toLowerCase();
-          const lProv = (loc.province || '').toLowerCase();
+          const wCity = (worker.city || '').toLowerCase().trim();
+          const wProv = (worker.province || '').toLowerCase().trim();
+          const lCity = (loc.city || '').toLowerCase().trim();
+          const lProv = (loc.province || '').toLowerCase().trim();
           return (lCity && wCity.includes(lCity)) || (lProv && (wProv.includes(lProv) || lProv.includes(wProv)));
         });
+
+        // 2. Check if matches candidate's preferred work regions/provinces
+        let matchesPreferred = false;
+        let preferredRegions: any[] = [];
+        try {
+          preferredRegions = JSON.parse(worker.availabilityRegionsProvinces || '[]');
+        } catch (e) {
+          preferredRegions = [];
+        }
+
+        if (preferredRegions.length > 0) {
+          const hasAllRegions = preferredRegions.some((r: any) => r.region === 'Tutte le regioni');
+          if (hasAllRegions) {
+            matchesPreferred = true;
+          } else {
+            matchesPreferred = locsArr.some(loc => {
+              if (loc.province === 'Tutto il territorio nazionale' || loc.city === 'Tutto il territorio nazionale') return true;
+              const lProv = (loc.province || '').toLowerCase().trim();
+              const lSigla = (loc.sigla || '').toUpperCase().trim();
+              
+              const resolvedProvName = (lProv || SIGLA_TO_PROVINCE[lSigla] || '').toLowerCase().trim();
+              if (!resolvedProvName) return false;
+
+              // Find the region of this province
+              let proposalRegion: string | null = null;
+              for (const [region, provinces] of Object.entries(REGIONS_AND_PROVINCES)) {
+                if (provinces.some(p => {
+                  const normalizedP = p.toLowerCase();
+                  return normalizedP === resolvedProvName || normalizedP.includes(resolvedProvName) || resolvedProvName.includes(normalizedP);
+                })) {
+                  proposalRegion = region;
+                  break;
+                }
+              }
+
+              if (!proposalRegion) return false;
+
+              const matchingRegionEntry = preferredRegions.find(r => r.region.toLowerCase().trim() === proposalRegion!.toLowerCase().trim());
+              if (!matchingRegionEntry) return false;
+
+              const provincesList = matchingRegionEntry.provinces || [];
+              if (provincesList.length === 0) return true; // Empty array means all provinces in this region
+              
+              const hasAllProvinces = provincesList.some((p: any) => p.name === 'Tutte le province');
+              if (hasAllProvinces) return true;
+
+              return provincesList.some((p: any) => {
+                const pName = p.name.toLowerCase().trim();
+                return pName === resolvedProvName || pName.includes(resolvedProvName) || resolvedProvName.includes(pName);
+              });
+            });
+          }
+        }
+
+        matchLoc = matchesResidence || matchesPreferred;
       }
       if (!matchLoc) return false;
 
