@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { PROFESSIONS, CITIES, PROVINCE_SIGLE } from '../utils/constants';
+import { PROFESSIONS, CITIES, PROVINCE_SIGLE, ORGANIZATIONAL_SKILLS_LIST, COMMUNICATIVE_SKILLS_LIST } from '../utils/constants';
 
 interface CompanyDashboardProps {
   onNotifyMobile?: (title: string, message: string) => void;
@@ -29,6 +29,8 @@ const formatNumberThousands = (val: string) => {
   if (!cleanDigits) return '';
   return Number(cleanDigits).toLocaleString('it-IT');
 };
+
+const isLaurea = (level: string) => level === 'LAUREA' || level === 'LAUREA_TRIENNALE' || level === 'LAUREA_SPECIALISTICA' || level === 'LAUREA_MAGISTRALE';
 
 export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobile }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'create_proposal' | 'list_proposals'>('create_proposal');
@@ -87,10 +89,38 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
   // Selected Proposal Accepted Candidates Drawer / Modal
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [viewingWorkerCv, setViewingWorkerCv] = useState<any | null>(null);
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await api.company.getNotifications();
+      setNotifications(data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleViewWorkerCv = async (workerId: string, notificationId?: string) => {
+    try {
+      const worker = await api.company.getWorkerDetails(workerId);
+      setViewingWorkerCv(worker);
+      if (notificationId) {
+        await api.company.markNotificationRead(notificationId);
+        fetchNotifications();
+      }
+    } catch (err) {
+      console.error('Error fetching worker details:', err);
+      alert('Impossibile caricare i dettagli del candidato CV.');
+    }
+  };
 
   useEffect(() => {
     fetchCompanyProfile();
     fetchProposals();
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchCompanyProfile = async () => {
@@ -431,6 +461,56 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
       {/* MAIN CONTENT AREA */}
       <main>
+        {/* Recruiter Banner Notifications */}
+        {notifications.filter(n => !n.read && n.type.startsWith('ACCEPTED_CONTACT:')).map(n => {
+          const workerId = n.type.split(':')[1];
+          return (
+            <div 
+              key={n.id} 
+              className="glass-card" 
+              style={{ 
+                background: 'rgba(16,185,129,0.1)', 
+                border: '1px solid var(--accent-green)', 
+                color: '#fff', 
+                padding: '16px 20px', 
+                borderRadius: '12px', 
+                marginBottom: '20px', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                boxShadow: '0 4px 20px rgba(16, 185, 129, 0.15)',
+                cursor: 'pointer'
+              }}
+              onClick={() => handleViewWorkerCv(workerId, n.id)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '1.5rem' }}>🟢</span>
+                <div>
+                  <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--accent-green)' }}>{n.title}</strong>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{n.message} Clicca qui per visualizzare il CV completo.</span>
+                </div>
+              </div>
+              <button 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await api.company.markNotificationRead(n.id);
+                  fetchNotifications();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                &times;
+              </button>
+            </div>
+          );
+        })}
+
         {submissionSuccessMsg && (
           <div style={{
             background: 'rgba(16, 185, 129, 0.15)',
@@ -796,7 +876,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                         className="form-control"
                         value={loc2Address}
                         onChange={(e) => setLoc2Address(formatCapitalizedWords(e.target.value))}
-                        placeholder="es. Corso Italia 45"
+                        placeholder="es. Via Roma 12"
                         autoComplete="off"
                       />
                     </div>
@@ -1212,10 +1292,18 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                           </div>
 
                           {/* Contact Info & CV PDF Link */}
-                          <div style={{ textAlign: 'right' }}>
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
                             <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                               📧 Email: {worker.user?.email || 'N/D'}
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => handleViewWorkerCv(worker.id)}
+                              className="btn btn-primary"
+                              style={{ fontSize: '0.75rem', padding: '6px 12px', background: 'var(--grad-primary)', border: 'none', width: '100%', minWidth: '150px', textAlign: 'center' }}
+                            >
+                              👁️ Vedi CV Completo
+                            </button>
                             {worker.cvPdfUrl && (
                               <button
                                 type="button"
@@ -1223,10 +1311,10 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                                   const backendUrl = api.isOffline() ? '' : 'http://localhost:5000';
                                   window.open(backendUrl + worker.cvPdfUrl, '_blank');
                                 }}
-                                className="btn btn-primary"
-                                style={{ marginTop: '8px', fontSize: '0.75rem', padding: '6px 12px' }}
+                                className="btn btn-secondary"
+                                style={{ fontSize: '0.75rem', padding: '6px 12px', width: '100%', minWidth: '150px', textAlign: 'center' }}
                               >
-                                📎 Scarica / Visualizza CV PDF
+                                📎 Scarica/Visualizza PDF
                               </button>
                             )}
                           </div>
@@ -1269,6 +1357,317 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
               );
             })()}
 
+          </div>
+        </div>
+      )}
+      {/* SINGLE CANDIDATE CV MODAL */}
+      {viewingWorkerCv && (
+        <div className="modal-overlay" style={{ zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="modal-content" style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', padding: '30px', position: 'relative', background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)', borderRadius: '16px' }}>
+            <div className="modal-close" onClick={() => setViewingWorkerCv(null)} style={{ fontSize: '1.8rem', cursor: 'pointer', position: 'absolute', top: '15px', right: '20px', color: 'var(--text-muted)' }}>&times;</div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px', borderBottom: '1px solid var(--border-glass)', paddingBottom: '20px' }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                background: 'var(--grad-primary)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '2.5rem',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                overflow: 'hidden'
+              }}>
+                {viewingWorkerCv.photoUrl ? (
+                  <img src={viewingWorkerCv.photoUrl} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : '👤'}
+              </div>
+              <div>
+                <span style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--accent-green)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-block', marginBottom: '6px' }}>
+                  ✅ Contatto Diretto Accettato
+                </span>
+                <h3 style={{ margin: 0, fontSize: '1.4rem', color: '#fff' }}>{viewingWorkerCv.firstName} {viewingWorkerCv.lastName}</h3>
+                <p style={{ margin: '4px 0 0 0', color: 'var(--accent-blue)', fontWeight: 700, fontSize: '0.95rem' }}>💼 {viewingWorkerCv.profession}</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+              <div>
+                <h5 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Dati di Contatto</h5>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📧 <strong>Email:</strong> {viewingWorkerCv.user?.email || viewingWorkerCv.email || 'N/D'}</p>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📍 <strong>Residenza:</strong> {viewingWorkerCv.city} ({viewingWorkerCv.sigla || viewingWorkerCv.province})</p>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>🚗 <strong>Patente / Auto:</strong> {[viewingWorkerCv.hasLicense && 'Patente', viewingWorkerCv.hasCar && 'Automunito'].filter(Boolean).join(' • ') || 'Nessuno'}</p>
+              </div>
+              <div>
+                <h5 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Preferenze Lavorative</h5>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>💰 <strong>Netto Desiderato:</strong> {viewingWorkerCv.desiredSalary || 'Non specificato'}</p>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📜 <strong>Contratto Desiderato:</strong> {viewingWorkerCv.desiredContract?.replace('_', ' ') || 'Qualsiasi'}</p>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>⚡ <strong>Stato Disponibilità:</strong> {viewingWorkerCv.availabilityStatus?.replace('_', ' ')}</p>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '20px', marginBottom: '24px' }}>
+              <h5 style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Titolo/i di Studio</h5>
+              {(() => {
+                let edus = [];
+                try {
+                  edus = JSON.parse(viewingWorkerCv.educationTitles || '[]');
+                } catch (e) {}
+                if (edus.length === 0) {
+                  if (!viewingWorkerCv.educationLevel || viewingWorkerCv.educationLevel === 'NESSUNO') {
+                    return <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Nessun Titolo</span>;
+                  }
+                  const label = viewingWorkerCv.educationLevel === 'LICENZA_MEDIA' ? 'Licenza Media' : 
+                                viewingWorkerCv.educationLevel === 'DIPLOMA' ? 'Diploma' : 
+                                viewingWorkerCv.educationLevel === 'LAUREA_TRIENNALE' ? 'Laurea triennale' : 
+                                viewingWorkerCv.educationLevel === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica' : 
+                                viewingWorkerCv.educationLevel === 'LAUREA_MAGISTRALE' ? 'Laurea Magistrale' : 'Laurea';
+                  return <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{label} {viewingWorkerCv.educationField ? `- ${viewingWorkerCv.educationField}` : ''}</span>;
+                }
+                return (
+                  <ul style={{ paddingLeft: '16px', margin: '4px 0 0 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    {edus.map((edu: any, i: number) => {
+                      const label = edu.level === 'LICENZA_MEDIA' ? 'Licenza Media' : 
+                                    edu.level === 'DIPLOMA' ? 'Diploma' : 
+                                    edu.level === 'LAUREA' ? 'Laurea triennale' : 
+                                    edu.level === 'LAUREA_TRIENNALE' ? 'Laurea triennale' : 
+                                    edu.level === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica' : 
+                                    edu.level === 'LAUREA_MAGISTRALE' ? 'Laurea Magistrale' : 
+                                    edu.level === 'MASTER' ? 'Master' : edu.level;
+                      
+                      let details = '';
+                      if (edu.level === 'DIPLOMA') {
+                        const dateStr = edu.inData ? ` (Conseguito in data: ${edu.inData})` : '';
+                        const gradeStr = edu.votazione ? `, Votazione: ${edu.votazione}` : '';
+                        details = `${edu.field || ''}${dateStr}${gradeStr}`;
+                      } else if (isLaurea(edu.level)) {
+                        const uniStr = edu.conseguitoPresso ? ` presso ${edu.conseguitoPresso}` : '';
+                        const dateStr = edu.inData ? ` in data: ${edu.inData}` : '';
+                        const gradeStr = edu.votazione ? `, Votazione: ${edu.votazione}` : '';
+                        details = `${edu.field || ''}${uniStr}${dateStr}${gradeStr}`;
+                      } else if (edu.level === 'MASTER') {
+                        const uniStr = edu.conseguitoPresso ? ` presso ${edu.conseguitoPresso}` : '';
+                        const dateStr = edu.inData ? ` in data: ${edu.inData}` : '';
+                        details = `${edu.field || 'Master'}${uniStr}${dateStr}`;
+                      } else {
+                        details = edu.field || '';
+                      }
+                      
+                      return (
+                        <li key={i} style={{ marginBottom: '6px' }}>
+                          <strong>{label}</strong>{details ? `: ${details}` : ''}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '20px', marginBottom: '24px' }}>
+              <h5 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Competenze Professionali</h5>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {(() => {
+                  let parsed: any = { computerSkills: {}, organizationalSkills: {} };
+                  try {
+                    parsed = JSON.parse(viewingWorkerCv.skills || '{}');
+                  } catch (e) {
+                    const skillsArr = (viewingWorkerCv.skills || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+                    if (skillsArr.length > 0) {
+                      return (
+                        <div>
+                          <strong>Competenze:</strong>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                            {skillsArr.map((skill: string, i: number) => (
+                              <span key={i} className="tag" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{skill}</span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }
+
+                  const sortSkillsByLevel = (keys: string[], skillsMap: Record<string, string>) => {
+                    const levelOrder: Record<string, number> = {
+                      'Avanzato': 1,
+                      'Intermedio': 2,
+                      'Base': 3
+                    };
+                    return [...keys].sort((a, b) => {
+                      const lvlA = skillsMap[a] || '';
+                      const lvlB = skillsMap[b] || '';
+                      const oA = levelOrder[lvlA] || 99;
+                      const oB = levelOrder[lvlB] || 99;
+                      if (oA !== oB) return oA - oB;
+                      return a.localeCompare(b);
+                    });
+                  };
+
+                  const compSkills = (parsed.computerSkills || {}) as any;
+                  const orgSkills = (parsed.organizationalSkills || {}) as any;
+                  const langSkills = (parsed.languageSkills || {}) as any;
+                  const commSkills = (parsed.communicativeSkills || {}) as any;
+
+                  const compKeys = sortSkillsByLevel(Object.keys(compSkills), compSkills);
+                  const orgKeys = sortSkillsByLevel(Object.keys(orgSkills), orgSkills);
+                  const langKeys = sortSkillsByLevel(Object.keys(langSkills).filter(k => langSkills[k] && langSkills[k] !== 'Nessuna'), langSkills);
+                  const commKeys = sortSkillsByLevel(Object.keys(commSkills).filter(k => commSkills[k] && commSkills[k] !== 'Nessuna'), commSkills);
+
+                  // Organizational skills descriptions definition locally
+                  const orgDescriptions: Record<string, string> = {
+                    'Gestione del tempo': 'Capacità di pianificare, organizzare e ripartire il proprio tempo tra diverse attività per massimizzare l\'efficienza.',
+                    'Precisione operativa': 'Attenzione meticolosa ai dettagli nell\'esecuzione dei compiti per garantire la massima accuratezza ed evitare errori.',
+                    'Gestione delle scadenze': 'Abilità nel programmare il lavoro in modo da rispettare puntualmente i termini stabiliti.',
+                    'Risoluzione dei problemi': 'Approccio analitico e propositivo per individuare, analizzare e superare le criticità lavorative.',
+                    'Gestione dei progetti': 'Capacità di pianificare, monitorare e portare a termine progetti nel rispetto di tempi, costi e risultati attesi.',
+                    'Ottimizzazione dei processi': 'Capacità di individuare opportunità di miglioramento nell\'organizzazione del lavoro e nei processi.'
+                  };
+
+                  // Communicative skills descriptions definition locally
+                  const commDescriptions: Record<string, string> = {
+                    'Ascolto attivo': 'Capacità di ascoltare con attenzione e coinvolgimento per comprendere a fondo le esigenze dell\'interlocutore.',
+                    'Lavoro di squadra': 'Attitudine a collaborare positivamente con colleghi e collaboratori per il raggiungimento di obiettivi comuni.',
+                    'Relazioni con il pubblico': 'Abilità nel relazionarsi con clienti o utenti esterni in modo cortese, chiaro ed efficace.',
+                    'Comunicazione scritta': 'Capacità di redigere testi, email o documenti di lavoro in modo chiaro, preciso e strutturato.',
+                    'Negoziazione': 'Abilità nel gestire trattative e convergere verso soluzioni condivise e vantaggiose per le parti.',
+                    'Risoluzione dei conflitti': 'Capacità di mediare e risolvere tensioni all\'interno del team o con soggetti esterni in modo costruttivo.'
+                  };
+
+                  return (
+                    <>
+                      {compKeys.length > 0 && (
+                        <div>
+                          <strong>Competenze Informatiche:</strong>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                            {compKeys.map(skill => (
+                              <span key={skill} className="tag" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                                {skill} <span style={{ color: 'var(--accent-blue)', marginLeft: '4px' }}>({compSkills[skill]})</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {langKeys.length > 0 && (
+                        <div>
+                          <strong>Competenze Linguistiche:</strong>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', marginBottom: '8px' }}>
+                            {langKeys.map(skill => (
+                              <span key={skill} className="tag" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                                {skill} <span style={{ color: 'var(--accent-blue)', marginLeft: '4px' }}>({langSkills[skill]})</span>
+                              </span>
+                            ))}
+                          </div>
+                          
+                          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--border-glass)', fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                            <strong style={{ color: '#fff', fontSize: '0.75rem', display: 'block', marginBottom: '2px' }}>Legenda Livelli Lingue:</strong>
+                            <ul style={{ paddingLeft: '12px', margin: 0, listStyleType: 'disc' }}>
+                              <li><strong>Nessuna:</strong> Non si possiedono conoscenze della lingua.</li>
+                              <li><strong>Base:</strong> Si comprendono e si usano parole ed espressioni semplici; si riesce a comunicare in situazioni quotidiane essenziali.</li>
+                              <li><strong>Intermedio:</strong> Si comprende il significato generale di conversazioni e testi; si comunica con una buona autonomia su argomenti comuni.</li>
+                              <li><strong>Avanzato:</strong> Si utilizza la lingua con scioltezza e precisione, sia nel parlato che nello scritto, anche in contesti complessi o professionali.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      {orgKeys.length > 0 && (
+                        <div>
+                          <strong>Competenze Organizzative:</strong>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                            {orgKeys.map(skill => {
+                              const desc = orgDescriptions[skill] || '';
+                              return (
+                                <div key={skill} style={{ fontSize: '0.8rem', padding: '8px 10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-glass)', borderRadius: '6px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                                  <strong>{skill}</strong> {desc ? `– ${desc}` : ''} <span style={{ color: 'var(--accent-blue)', marginLeft: '4px', fontWeight: 'bold' }}>({orgSkills[skill]})</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {commKeys.length > 0 && (
+                        <div>
+                          <strong>Competenze Comunicative e Relazionali:</strong>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                            {commKeys.map(skill => {
+                              const desc = commDescriptions[skill] || '';
+                              return (
+                                <div key={skill} style={{ fontSize: '0.8rem', padding: '8px 10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-glass)', borderRadius: '6px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                                  <strong>{skill}</strong> {desc ? `– ${desc}` : ''} <span style={{ color: 'var(--accent-blue)', marginLeft: '4px', fontWeight: 'bold' }}>({commSkills[skill]})</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              {viewingWorkerCv.certifications && (
+                <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+                  <strong>Certificazioni:</strong>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                    {viewingWorkerCv.certifications.split(',').map((cert: string, i: number) => (
+                      <span key={i} className="tag" style={{ borderColor: 'rgba(139,92,246,0.3)', color: '#d8b4fe', fontSize: '0.75rem', padding: '3px 8px' }}>{cert.trim()}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '20px', marginBottom: '24px' }}>
+              <h5 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Esperienze Lavorative Precedenti</h5>
+              {(viewingWorkerCv.workExperiences || []).length === 0 ? (
+                <p style={{ fontStyle: 'italic', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessuna esperienza lavorativa registrata</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {(viewingWorkerCv.workExperiences || []).map((exp: any) => (
+                    <div key={exp.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-glass)', padding: '12px', borderRadius: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <strong style={{ fontSize: '0.9rem', color: '#fff' }}>{exp.role}</strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{exp.startDate} - {exp.endDate || 'Presente'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--accent-blue)', fontWeight: 600 }}>{exp.companyName} {exp.city && `(${exp.city})`}</div>
+                      {exp.description && <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>{exp.description}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border-glass)', paddingTop: '20px', justifyContent: 'flex-end' }}>
+              {viewingWorkerCv.cvPdfUrl && (
+                <a 
+                  href={viewingWorkerCv.cvPdfUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="btn btn-primary"
+                  style={{ textDecoration: 'none', display: 'inline-block', fontSize: '0.85rem' }}
+                >
+                  📎 Visualizza CV PDF
+                </a>
+              )}
+              {viewingWorkerCv.videoPresentationUrl && (
+                <a 
+                  href={viewingWorkerCv.videoPresentationUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="btn btn-secondary"
+                  style={{ textDecoration: 'none', display: 'inline-block', fontSize: '0.85rem' }}
+                >
+                  🎥 Guarda Video Presentazione
+                </a>
+              )}
+              <button className="btn btn-secondary" onClick={() => setViewingWorkerCv(null)} style={{ fontSize: '0.85rem' }}>Chiudi</button>
+            </div>
           </div>
         </div>
       )}

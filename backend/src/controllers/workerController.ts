@@ -304,7 +304,7 @@ export const respondToInterviewRequest = async (req: any, res: Response) => {
         userId: updatedRequest.company.userId,
         title: 'Risposta a Proposta Iniziale',
         message: `${profile.firstName} ${profile.lastName} ha risposto alla tua proposta iniziale. Risposta: "${statusText}".`,
-        type: 'MESSAGE'
+        type: status === 'ACCEPTED' ? `ACCEPTED_CONTACT:${profile.id}` : 'MESSAGE'
       }
     });
 
@@ -579,7 +579,7 @@ export const respondToJobProposal = async (req: any, res: Response) => {
           userId: proposal.company.userId,
           title: 'Candidato Ha Accettato!',
           message: `Il candidato ${worker.firstName} ${worker.lastName} (${worker.profession}) ha accettato la tua richiesta di ulteriori informazioni per la proposta di lavoro.`,
-          type: 'MESSAGE'
+          type: `ACCEPTED_CONTACT:${worker.id}`
         }
       });
     }

@@ -58,7 +58,7 @@ export const register = async (req: Request, res: Response) => {
             skills: profileData?.skills || 'Nessuna',
             educationLevel: profileData?.educationLevel || 'NESSUNO',
             educationTitles: profileData?.educationTitles || '[]',
-            availabilityStatus: 'VALUTO_OFFERTE',
+            availabilityStatus: 'NON_DISPONIBILE',
             desiredContract: profileData?.desiredContract || 'TEMPO_INDETERMINATO'
           }
         });
@@ -244,7 +244,7 @@ export const socialLoginSimulation = async (req: Request, res: Response) => {
               region: 'Lombardia',
               profession: 'Sviluppatore Web',
               skills: 'HTML, CSS, JavaScript, React',
-              availabilityStatus: 'DISPONIBILE_SUBITO',
+              availabilityStatus: 'NON_DISPONIBILE',
               desiredContract: 'TEMPO_INDETERMINATO'
             }
           });

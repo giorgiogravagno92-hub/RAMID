@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const companyController_1 = require("../controllers/companyController");
+const workerController_1 = require("../controllers/workerController");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticateToken);
@@ -16,4 +17,6 @@ router.post('/proposals', (0, auth_1.requireRole)(['COMPANY']), companyControlle
 router.get('/proposals', (0, auth_1.requireRole)(['COMPANY']), companyController_1.getProposals);
 router.put('/proposals/:id', (0, auth_1.requireRole)(['COMPANY']), companyController_1.updateProposal);
 router.delete('/proposals/:id', (0, auth_1.requireRole)(['COMPANY']), companyController_1.deleteProposal);
+router.get('/notifications', (0, auth_1.requireRole)(['COMPANY']), workerController_1.getNotifications);
+router.put('/notifications/:id/read', (0, auth_1.requireRole)(['COMPANY']), workerController_1.markNotificationRead);
 exports.default = router;

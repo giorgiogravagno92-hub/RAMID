@@ -44,12 +44,52 @@ const formatCurrencyInput = (value: string) => {
   return `€ ${formatted}`;
 };
 
+const formatCapitalizedWords = (str: string) => {
+  if (!str) return '';
+  return str
+    .split(' ')
+    .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : '')
+    .join(' ');
+};
+
 export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile }) => {
   const isLaurea = (level: string) => level === 'LAUREA' || level === 'LAUREA_TRIENNALE' || level === 'LAUREA_SPECIALISTICA' || level === 'LAUREA_MAGISTRALE';
   const [profile, setProfile] = useState<any>(null);
   const [interviews, setInterviews] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [companyJobProposals, setCompanyJobProposals] = useState<any[]>([]);
+  const [respondingProposal, setRespondingProposal] = useState<any | null>(null);
+  const [hiddenProposalBanners, setHiddenProposalBanners] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('hidden_proposal_banners');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const hideProposalBanner = (proposalId: string) => {
+    const updated = [...hiddenProposalBanners, proposalId];
+    setHiddenProposalBanners(updated);
+    try {
+      localStorage.setItem('hidden_proposal_banners', JSON.stringify(updated));
+    } catch (e) {}
+  };
+  const [selectedProfessions, setSelectedProfessions] = useState<string[]>([]);
+  const [tempProfession, setTempProfession] = useState('');
+  const [customProfessionActive, setCustomProfessionActive] = useState(false);
+  const [customProfessionText, setCustomProfessionText] = useState('');
+
+  const addProfession = (profName: string) => {
+    const formatted = formatCapitalizedWords(profName).trim();
+    if (formatted && !selectedProfessions.includes(formatted)) {
+      setSelectedProfessions([...selectedProfessions, formatted]);
+    }
+  };
+
+  const removeProfession = (profName: string) => {
+    setSelectedProfessions(selectedProfessions.filter(p => p !== profName));
+  };
+
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -158,6 +198,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(() => {
+      api.worker.getNotifications().then(notifs => setNotifications(notifs || [])).catch(() => {});
+      api.worker.getProposals().then(props => setCompanyJobProposals(props || [])).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Initialize skills and education states when editing is toggled or profile changes
@@ -181,6 +226,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       } catch (e) {
         setEducationTitles([]);
       }
+      const initialProfs = profile.profession ? profile.profession.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+      setSelectedProfessions(initialProfs);
     }
   }, [profile, isEditing]);
 
@@ -188,6 +235,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
     try {
       const prof = await api.worker.getProfile();
       setProfile(prof);
+      const initialProfs = prof.profession ? prof.profession.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+      setSelectedProfessions(initialProfs);
       setFormData({
         ...prof,
         workExperiences: prof.workExperiences || [],
@@ -495,8 +544,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       alert('Nome e Cognome sono obbligatori.');
       return;
     }
-    if (!formData.profession) {
-      alert('La professione è obbligatoria.');
+    if (selectedProfessions.length === 0) {
+      alert('La professione è obbligatoria. Inserisci almeno una professione.');
       return;
     }
     if (!formData.city?.trim() || !formData.province) {
@@ -523,6 +572,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       const educationsStr = noEducationEdit ? '[]' : JSON.stringify(educationTitles);
       const updated = await api.worker.updateProfile({
         ...formData,
+        profession: selectedProfessions.join(', '),
         educationLevel: noEducationEdit ? 'NESSUNO' : (formData.educationLevel === 'NESSUNO' ? 'DIPLOMA' : formData.educationLevel),
         skills: skillsStr,
         educationTitles: educationsStr
@@ -847,8 +897,64 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
   const isProfileIncomplete = profile && (!profile.city || !profile.province || !profile.profession);
   const showEditForm = isEditing || isProfileIncomplete;
 
+  const pendingProposals = companyJobProposals.filter(p => {
+    const hasResponse = (p.responses || []).length > 0;
+    return !hasResponse && !hiddenProposalBanners.includes(p.id);
+  });
+
   return (
     <div style={{ padding: '10px 0' }}>
+      {/* Candidate Banner Notifications for Job Proposals */}
+      {pendingProposals.map((prop) => {
+        let profsList: string[] = [];
+        try { profsList = JSON.parse(prop.professions || '[]'); } catch (e) {}
+        
+        return (
+          <div 
+            key={prop.id} 
+            className="glass-card" 
+            style={{ 
+              background: 'rgba(59,130,246,0.1)', 
+              border: '1px solid var(--accent-blue)', 
+              color: '#fff', 
+              padding: '16px 20px', 
+              borderRadius: '12px', 
+              marginBottom: '20px', 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              boxShadow: '0 4px 20px rgba(59, 130, 246, 0.15)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '1.5rem' }}>💼</span>
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>Nuova Proposta di Lavoro da {prop.company?.companyName || 'Azienda'}!</strong>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Posizione ricercata: {profsList.join(', ')}.</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700 }}
+                onClick={() => setRespondingProposal(prop)}
+              >
+                Rispondi Subito ⚡
+              </button>
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600 }}
+                onClick={() => hideProposalBanner(prop.id)}
+              >
+                Nascondi
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
       {isProfileIncomplete && (
         <div style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid var(--accent-blue)', color: 'var(--text-primary)', padding: '16px', borderRadius: '12px', marginBottom: '20px', fontSize: '0.95rem', lineHeight: '1.4' }}>
           👋 <strong>Benvenuto su Sono Qui!</strong><br />
@@ -1027,37 +1133,103 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
               </div>
 
               <div className="form-group">
-                <label className="form-label">Professione</label>
-                <select 
-                  className="form-control" 
-                  value={formData.profession && !PROFESSIONS.includes(formData.profession) ? 'Altra professione' : (formData.profession || '')}
-                  onChange={(e) => {
-                    if (e.target.value === 'Altra professione') {
-                      setFormData({ ...formData, profession: '' });
-                    } else {
-                      setFormData({ ...formData, profession: e.target.value });
-                    }
-                  }}
-                  required
-                >
-                  <option value="">-- Seleziona Professione --</option>
-                  {PROFESSIONS.map((prof) => (
-                    <option key={prof} value={prof}>{prof}</option>
-                  ))}
-                  <option value="Altra professione">Altra professione</option>
-                </select>
+                <label className="form-label" style={{ fontWeight: 'bold' }}>Professioni / Ruoli Cercati (Seleziona uno o più)</label>
+                
+                {/* Visualizzazione Professioni Aggiunte */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                  {selectedProfessions.length === 0 ? (
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Nessuna professione ancora aggiunta (inseriscine almeno una).
+                    </span>
+                  ) : (
+                    selectedProfessions.map((p) => (
+                      <span 
+                        key={p} 
+                        className="tag" 
+                        style={{ 
+                          background: 'rgba(59, 130, 246, 0.1)', 
+                          borderColor: 'var(--accent-blue)', 
+                          color: '#fff', 
+                          fontSize: '0.8rem', 
+                          padding: '6px 12px', 
+                          borderRadius: '20px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '6px' 
+                        }}
+                      >
+                        💼 {p}
+                        <span 
+                          onClick={() => removeProfession(p)} 
+                          style={{ cursor: 'pointer', color: 'var(--accent-red)', fontWeight: 'bold', marginLeft: '4px' }}
+                          title="Rimuovi"
+                        >
+                          &times;
+                        </span>
+                      </span>
+                    ))
+                  )}
+                </div>
 
-                {(formData.profession === '' || (formData.profession && !PROFESSIONS.includes(formData.profession))) && (
-                  <div className="form-group" style={{ marginTop: '10px', marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Specifica professione personalizzata</label>
+                {/* Aggiunta Professione da Elenco o Libera */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    className="form-control" 
+                    value={tempProfession}
+                    onChange={(e) => {
+                      if (e.target.value === 'Altra professione') {
+                        setCustomProfessionActive(true);
+                        setTempProfession('');
+                      } else if (e.target.value !== '') {
+                        addProfession(e.target.value);
+                        setTempProfession('');
+                      }
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">-- Aggiungi da Elenco --</option>
+                    {PROFESSIONS.filter(p => !selectedProfessions.includes(p)).map((prof) => (
+                      <option key={prof} value={prof}>{prof}</option>
+                    ))}
+                    <option value="Altra professione">Altra professione (Digitabile)</option>
+                  </select>
+                </div>
+
+                {customProfessionActive && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                     <input 
                       type="text" 
                       className="form-control" 
-                      value={formData.profession || ''} 
-                      onChange={(e) => setFormData({...formData, profession: e.target.value})} 
-                      placeholder="es. Astronauta, Sommelier" 
-                      required 
+                      placeholder="Specifica professione personalizzata..."
+                      value={customProfessionText}
+                      onChange={(e) => setCustomProfessionText(e.target.value)}
+                      style={{ flex: 1 }}
                     />
+                    <button 
+                      type="button" 
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (customProfessionText.trim()) {
+                          addProfession(customProfessionText.trim());
+                          setCustomProfessionText('');
+                          setCustomProfessionActive(false);
+                        }
+                      }}
+                      style={{ padding: '8px 14px' }}
+                    >
+                      Aggiungi
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setCustomProfessionText('');
+                        setCustomProfessionActive(false);
+                      }}
+                      style={{ padding: '8px 14px' }}
+                    >
+                      Annulla
+                    </button>
                   </div>
                 )}
               </div>
@@ -1630,15 +1802,10 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         <label className="form-label" style={{ fontSize: '0.75rem' }}>Votazione</label>
                         <input 
                           type="text" 
-                          inputMode="numeric"
-                          pattern="[0-9]*"
                           className="form-control" 
-                          placeholder="Solo numeri" 
+                          placeholder="Inserisci votazione" 
                           value={newEduVotazione} 
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, '');
-                            setNewEduVotazione(val);
-                          }} 
+                          onChange={(e) => setNewEduVotazione(e.target.value)} 
                         />
                       </div>
                       <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1685,15 +1852,10 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                           <label className="form-label" style={{ fontSize: '0.75rem' }}>Votazione</label>
                           <input 
                             type="text" 
-                            inputMode="numeric"
-                            pattern="[0-9]*"
                             className="form-control" 
-                            placeholder="Solo numeri" 
+                            placeholder="Inserisci votazione" 
                             value={newEduVotazione} 
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/\D/g, '');
-                              setNewEduVotazione(val);
-                            }} 
+                            onChange={(e) => setNewEduVotazione(e.target.value)} 
                           />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -2985,13 +3147,13 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
           {/* Notifiche push storiche */}
           <div>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#fff' }}>Storico Notifiche Push</h3>
-            {notifications.length === 0 ? (
+            {notifications.filter(n => n.type !== 'EMAIL_SIMULATION').length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', textAlign: 'center' }}>
                 Nessuna notifica ricevuta al momento.
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {notifications.map((n) => (
+                {notifications.filter(n => n.type !== 'EMAIL_SIMULATION').map((n) => (
                   <div key={n.id} className="glass-card" style={{ padding: '12px', background: n.read ? 'rgba(15,23,42,0.4)' : 'var(--bg-card)', borderLeft: n.read ? 'none' : '2px solid var(--accent-purple)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong style={{ fontSize: '0.85rem' }}>{n.title}</strong>
@@ -3000,6 +3162,50 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       </span>
                     </div>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', margin: '4px 0 0 0' }}>{n.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Email inbox simulator */}
+          <div style={{ marginTop: '24px' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              📧 Simulatore E-mail Ricevute ({notifications.filter(n => n.type === 'EMAIL_SIMULATION').length})
+            </h3>
+            {notifications.filter(n => n.type === 'EMAIL_SIMULATION').length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', textAlign: 'center' }}>
+                Nessuna e-mail ricevuta.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {notifications.filter(n => n.type === 'EMAIL_SIMULATION').map((email) => (
+                  <div 
+                    key={email.id} 
+                    className="glass-card" 
+                    style={{ 
+                      padding: '16px', 
+                      background: 'rgba(255, 255, 255, 0.02)', 
+                      borderLeft: '4px solid var(--accent-blue)',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px dashed var(--border-glass)', paddingBottom: '6px' }}>
+                      <strong style={{ fontSize: '0.85rem', color: 'var(--accent-blue)' }}>{email.title}</strong>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {new Date(email.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                    <pre style={{ 
+                      margin: 0, 
+                      whiteSpace: 'pre-wrap', 
+                      fontFamily: 'inherit', 
+                      fontSize: '0.8rem', 
+                      color: 'var(--text-secondary)',
+                      lineHeight: '1.4'
+                    }}>
+                      {email.message}
+                    </pre>
                   </div>
                 ))}
               </div>
@@ -3631,6 +3837,81 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
               )}
               <button type="button" className="btn btn-secondary" style={{ padding: '10px 16px' }} onClick={cancelVideoRecording}>
                 Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* PROPOSAL RESPONSE MODAL */}
+      {respondingProposal && (
+        <div className="modal-overlay" style={{ zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%', padding: '24px', position: 'relative', background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)', borderRadius: '16px' }}>
+            <div className="modal-close" onClick={() => setRespondingProposal(null)} style={{ fontSize: '1.8rem', cursor: 'pointer', position: 'absolute', top: '15px', right: '20px', color: 'var(--text-muted)' }}>&times;</div>
+            
+            <h3 style={{ fontSize: '1.2rem', color: 'var(--accent-blue)', marginBottom: '8px' }}>💼 Dettagli Proposta di Lavoro</h3>
+            <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#fff' }}>
+              Azienda: {respondingProposal.company?.companyName || 'Azienda Riservata'}
+            </h4>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <div><strong>Professioni ricercate:</strong> {(() => {
+                try {
+                  const profs = JSON.parse(respondingProposal.professions || '[]');
+                  if (Array.isArray(profs)) return profs.join(', ');
+                } catch(e){}
+                return respondingProposal.professions || 'N/D';
+              })()}</div>
+              <div><strong>Sede di lavoro:</strong> {(() => {
+                try {
+                  const locs = JSON.parse(respondingProposal.locations || '[]');
+                  if (Array.isArray(locs)) return locs.map((l: any) => `${l.city || ''} (${l.sigla || l.province})`).join(' | ');
+                } catch(e){}
+                return 'N/D';
+              })()}</div>
+              <div><strong>Retribuzione mensile netta offerta:</strong> {respondingProposal.minSalary || respondingProposal.maxSalary ? `€ ${respondingProposal.minSalary || '0'} - € ${respondingProposal.maxSalary || 'Max'}` : 'Non specificato'}</div>
+              {respondingProposal.notes && (
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-glass)', fontStyle: 'italic', marginTop: '6px' }}>
+                  💬 "{respondingProposal.notes}"
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                type="button"
+                className="btn btn-success" 
+                style={{ flex: 1, padding: '10px', fontSize: '0.85rem', fontWeight: 700 }}
+                onClick={async () => {
+                  try {
+                    await api.worker.respondToProposal(respondingProposal.id, 'ACCEPTED');
+                    alert("Hai accettato il contatto diretto! L'azienda ora può visualizzare i tuoi recapiti ed il CV completo.");
+                    setRespondingProposal(null);
+                    // refresh data
+                    const updatedProps = await api.worker.getProposals();
+                    setCompanyJobProposals(updatedProps || []);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+              >
+                ✅ Accetta Contatto
+              </button>
+              <button 
+                type="button"
+                className="btn btn-danger" 
+                style={{ flex: 1, padding: '10px', fontSize: '0.85rem', fontWeight: 700 }}
+                onClick={async () => {
+                  try {
+                    await api.worker.respondToProposal(respondingProposal.id, 'DECLINED');
+                    setRespondingProposal(null);
+                    const updatedProps = await api.worker.getProposals();
+                    setCompanyJobProposals(updatedProps || []);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+              >
+                ❌ Rifiuta
               </button>
             </div>
           </div>

@@ -42,6 +42,41 @@ async function main() {
     }
   });
 
+  const giorgioHash = await bcrypt.hash('Televideo00@', 10);
+  const recruiterUser = await prisma.user.upsert({
+    where: { email: 'giorgio.gravagno92@gmail.com' },
+    update: {
+      plainPassword: 'Televideo00@',
+      emailVerified: true
+    },
+    create: {
+      email: 'giorgio.gravagno92@gmail.com',
+      passwordHash: giorgioHash,
+      plainPassword: 'Televideo00@',
+      role: 'COMPANY',
+      emailVerified: true
+    }
+  });
+
+  await prisma.companyProfile.upsert({
+    where: { userId: recruiterUser.id },
+    update: {},
+    create: {
+      userId: recruiterUser.id,
+      companyType: 'AZIENDA',
+      companyName: 'Gravagno Retail & Consulting',
+      industry: 'Servizi alle Imprese',
+      city: 'Roma',
+      province: 'Roma',
+      sigla: 'RM',
+      address: 'Via Nazionale 124',
+      contactPerson: 'Dott. Giorgio Gravagno',
+      contactPhone: '+39 06 9876543',
+      logoUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=150&auto=format&fit=crop&q=60'
+    }
+  });
+  console.log('Created Recruiter Giorgio:', recruiterUser.email);
+
   const companyProfile = await prisma.companyProfile.upsert({
     where: { userId: companyUser.id },
     update: {
@@ -219,6 +254,38 @@ async function main() {
       desiredSalary: '€25/ora',
       photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=60',
       workExperiences: []
+    },
+    {
+      email: 'rossella.balsamo@gmail.com',
+      firstName: 'Rossella',
+      lastName: 'Balsamo',
+      profession: 'Addetta Vendite',
+      specialization: 'Abbigliamento, Visual Merchandising, Vendita Assistita',
+      city: 'Milano',
+      province: 'MI',
+      region: 'Lombardia',
+      experienceYears: 4,
+      educationLevel: 'DIPLOMA',
+      educationField: 'Liceo Linguistico',
+      skills: 'Vendita al dettaglio, Cassa, Visual Merchandising, Lingua Inglese, Problem Solving, Flessibilità',
+      certifications: 'Corso di Comunicazione Efficace e Gestione Clienti',
+      hasLicense: true,
+      hasCar: true,
+      availabilityStatus: 'DISPONIBILE_PROPOSTE',
+      maxDistanceKm: 30,
+      desiredContract: 'TEMPO_INDETERMINATO',
+      desiredSalary: '€ 1.400 netti/mese',
+      photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=60',
+      workExperiences: [
+        {
+          companyName: 'Zara Milano Centro',
+          role: 'Sales Assistant & Cashier',
+          startDate: '2022-09',
+          endDate: '2025-06',
+          description: 'Gestione cassa, assistenza clienti nel reparto abbigliamento donna, visual merchandising.',
+          city: 'Milano'
+        }
+      ]
     }
   ];
 

@@ -155,6 +155,56 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
           Inserisci le tue credenziali o effettua l'accesso social rapido.
         </p>
 
+        {/* Accesso Rapido Immediato di Prova */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center' }}>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            style={{ fontSize: '0.7rem', padding: '8px', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)', borderColor: 'rgba(59, 130, 246, 0.3)', flex: 1, fontWeight: 700 }}
+            onClick={async () => {
+              setEmail('rossella.balsamo@gmail.com');
+              setPassword('password123');
+              setRole('WORKER');
+              setIsLogin(true);
+              setError('');
+              setLoading(true);
+              try {
+                const res = await api.auth.login({ email: 'rossella.balsamo@gmail.com', password: 'password123' });
+                onLoginSuccess(res.user, res.token);
+              } catch (err: any) {
+                setError(err.message || 'Errore login rapido');
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            ⚡ Rossella (Lavoratore)
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            style={{ fontSize: '0.7rem', padding: '8px', background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent-purple)', borderColor: 'rgba(139, 92, 246, 0.3)', flex: 1, fontWeight: 700 }}
+            onClick={async () => {
+              setEmail('giorgio.gravagno92@gmail.com');
+              setPassword('Televideo00@');
+              setRole('COMPANY');
+              setIsLogin(true);
+              setError('');
+              setLoading(true);
+              try {
+                const res = await api.auth.login({ email: 'giorgio.gravagno92@gmail.com', password: 'Televideo00@' });
+                onLoginSuccess(res.user, res.token);
+              } catch (err: any) {
+                setError(err.message || 'Errore login rapido');
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            ⚡ Giorgio (Recruiter)
+          </button>
+        </div>
+
         {error && (
           <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)', color: 'var(--accent-red)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem' }}>
             ⚠️ {error}

@@ -292,7 +292,9 @@ export const api = {
     createProposal: (body: any) => request('POST', '/companies/proposals', body),
     getProposals: () => request('GET', '/companies/proposals'),
     updateProposal: (id: string, body: any) => request('PUT', `/companies/proposals/${id}`, body),
-    deleteProposal: (id: string) => request('DELETE', `/companies/proposals/${id}`)
+    deleteProposal: (id: string) => request('DELETE', `/companies/proposals/${id}`),
+    getNotifications: () => request('GET', '/companies/notifications'),
+    markNotificationRead: (id: string) => request('PUT', `/companies/notifications/${id}/read`)
   },
   admin: {
     getStats: () => request('GET', '/admin/stats'),

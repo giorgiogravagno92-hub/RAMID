@@ -566,6 +566,10 @@ export const createProposal = async (req: any, res: Response) => {
       }
     });
 
+    if (proposal.status === 'ACTIVE') {
+      await notifyMatchingWorkersOfProposal(proposal);
+    }
+
     res.json(proposal);
   } catch (error: any) {
     console.error('Error creating proposal:', error);
@@ -650,6 +654,10 @@ export const updateProposal = async (req: any, res: Response) => {
       }
     });
 
+    if (proposal.status === 'ACTIVE') {
+      await notifyMatchingWorkersOfProposal(proposal);
+    }
+
     res.json(proposal);
   } catch (error: any) {
     console.error('Error updating proposal:', error);
@@ -667,5 +675,146 @@ export const deleteProposal = async (req: any, res: Response) => {
   } catch (error: any) {
     console.error('Error deleting proposal:', error);
     res.status(500).json({ error: 'Error deleting proposal' });
+  }
+};
+
+// Helper function to find matching workers and send notifications & simulated emails
+const notifyMatchingWorkersOfProposal = async (proposal: any) => {
+  try {
+    const workers = await prisma.workerProfile.findMany({
+      include: {
+        user: true
+      }
+    });
+
+    let profsArr: string[] = [];
+    try { profsArr = JSON.parse(proposal.professions || '[]'); } catch (e) {}
+
+    let locsArr: any[] = [];
+    try { locsArr = JSON.parse(proposal.locations || '[]'); } catch (e) {}
+
+    // Get company details
+    const company = await prisma.companyProfile.findUnique({
+      where: { id: proposal.companyId }
+    });
+
+    const companyName = company?.companyName || 'Un\'azienda';
+
+    for (const worker of workers) {
+      // 1. Profession match
+      let matchProf = false;
+      if (profsArr.length === 0) matchProf = true;
+      else {
+        const wProf = (worker.profession || '').toLowerCase();
+        let wRoles: string[] = [];
+        try { wRoles = JSON.parse(worker.availabilityRoles || '[]'); } catch (e) {}
+        matchProf = profsArr.some(p => {
+          const target = p.toLowerCase();
+          return wProf.includes(target) || wRoles.some(r => r.toLowerCase().includes(target));
+        });
+      }
+      if (!matchProf) continue;
+
+      // 2. Location match
+      let matchLoc = false;
+      if (locsArr.length === 0) {
+        matchLoc = true;
+      } else {
+        const matchesResidence = locsArr.some(loc => {
+          if (loc.province === 'Tutto il territorio nazionale' || loc.city === 'Tutto il territorio nazionale') return true;
+          const wCity = (worker.city || '').toLowerCase().trim();
+          const wProv = (worker.province || '').toLowerCase().trim();
+          const lCity = (loc.city || '').toLowerCase().trim();
+          const lProv = (loc.province || '').toLowerCase().trim();
+          const lSigla = (loc.sigla || '').toLowerCase().trim();
+          return (lCity && wCity.includes(lCity)) || 
+                 (lProv && (wProv.includes(lProv) || lProv.includes(wProv))) ||
+                 (lSigla && wProv.includes(lSigla));
+        });
+        
+        let matchesPreferred = false;
+        let preferredRegions: any[] = [];
+        try { preferredRegions = JSON.parse(worker.availabilityRegionsProvinces || '[]'); } catch (e) {}
+
+        if (preferredRegions.length > 0) {
+          const hasAllRegions = preferredRegions.some((r: any) => r.region === 'Tutte le regioni');
+          if (hasAllRegions) {
+            matchesPreferred = true;
+          } else {
+            matchesPreferred = locsArr.some(loc => {
+              if (loc.province === 'Tutto il territorio nazionale' || loc.city === 'Tutto il territorio nazionale') return true;
+              const lProv = (loc.province || '').toLowerCase().trim();
+              const lSigla = (loc.sigla || '').toLowerCase().trim();
+
+              return preferredRegions.some(reg => {
+                const provincesList = reg.provinces || [];
+                const hasAllProvinces = provincesList.some((p: any) => p.name === 'Tutte le province');
+                if (hasAllProvinces) return true;
+                return provincesList.some((p: any) => {
+                  const pName = p.name.toLowerCase().trim();
+                  return pName.includes(lProv) || lProv.includes(pName) || pName.includes(lSigla);
+                });
+              });
+            });
+          }
+        }
+        matchLoc = matchesResidence || matchesPreferred;
+      }
+      if (!matchLoc) continue;
+
+      // We found a match! Create a standard notification and a simulated email notification!
+      const professionsStr = profsArr.join(', ');
+
+      // A. Portal notification (check if already exists to avoid duplicates)
+      const existingNotif = await prisma.notification.findFirst({
+        where: {
+          userId: worker.userId,
+          title: `Nuova Proposta da ${companyName} 💼`,
+          type: 'NEW_PROPOSAL'
+        }
+      });
+
+      if (!existingNotif) {
+        await prisma.notification.create({
+          data: {
+            userId: worker.userId,
+            title: `Nuova Proposta da ${companyName} 💼`,
+            message: `Hai ricevuto una proposta di lavoro per la posizione di: ${professionsStr}.`,
+            type: 'NEW_PROPOSAL'
+          }
+        });
+
+        // B. Simulated email notification
+        const emailSubject = `Nuova proposta di lavoro per te da ${companyName}!`;
+        const emailBody = `Da: "Sono Qui Staff" <info@sonoqui.it>
+A: "${worker.firstName} ${worker.lastName}" <${worker.user.email}>
+Oggetto: ${emailSubject}
+
+Gentile ${worker.firstName},
+
+Siamo felici di comunicarti che l'azienda "${companyName}" ha pubblicato una nuova proposta di lavoro compatibile con il tuo profilo professionale!
+
+Dettagli della proposta:
+- Posizione ricercata: ${professionsStr}
+- Sede: ${locsArr.map(l => `${l.city || ''} (${l.sigla || l.province || ''})`).join(' / ')}
+- Retribuzione offerta: € ${proposal.minSalary || '0'} - € ${proposal.maxSalary || 'Max'} mensili netti
+
+Accedi subito al tuo pannello su Sono Qui per consultare la proposta completa e rispondere all'azienda!
+
+Cordiali saluti,
+Il Team di Sono Qui`;
+
+        await prisma.notification.create({
+          data: {
+            userId: worker.userId,
+            title: emailSubject,
+            message: emailBody,
+            type: 'EMAIL_SIMULATION'
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error sending matching notifications:', err);
   }
 };

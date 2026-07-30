@@ -13,6 +13,10 @@ import {
   updateProposal,
   deleteProposal
 } from '../controllers/companyController';
+import {
+  getNotifications,
+  markNotificationRead
+} from '../controllers/workerController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 
 const router = Router();
@@ -31,5 +35,8 @@ router.post('/proposals', requireRole(['COMPANY']) as any, createProposal as any
 router.get('/proposals', requireRole(['COMPANY']) as any, getProposals as any);
 router.put('/proposals/:id', requireRole(['COMPANY']) as any, updateProposal as any);
 router.delete('/proposals/:id', requireRole(['COMPANY']) as any, deleteProposal as any);
+
+router.get('/notifications', requireRole(['COMPANY']) as any, getNotifications as any);
+router.put('/notifications/:id/read', requireRole(['COMPANY']) as any, markNotificationRead as any);
 
 export default router;
