@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, BACKEND_URL } from '../utils/api';
 import { DIPLOMAS, DEGREES, PROFESSIONS, CITIES, REGIONS_AND_PROVINCES, COMPUTER_SKILLS_LIST, ORGANIZATIONAL_SKILLS_LIST, PROVINCE_SIGLE, UNIVERSITIES, COMMUNICATIVE_SKILLS_LIST, LANGUAGE_SKILLS_LIST } from '../utils/constants';
+import { isPushNotificationSupported, getNotificationPermissionState, subscribeUserToPush } from '../utils/pushHelper';
 
 interface WorkerDashboardProps {
   onNotifyMobile?: (title: string, message: string) => void;
@@ -117,6 +118,39 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
   const [cropImageSrc, setCropImageSrc] = useState<string>('');
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
+  const [isPushSupported, setIsPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [pushStatusMessage, setPushStatusMessage] = useState('');
+
+  useEffect(() => {
+    setIsPushSupported(isPushNotificationSupported());
+    setPushPermission(getNotificationPermissionState());
+  }, []);
+
+  const handleEnablePush = async () => {
+    setPushStatusMessage('Attivazione in corso...');
+    if ('Notification' in window) {
+      try {
+        const permission = await Notification.requestPermission();
+        setPushPermission(permission);
+        if (permission === 'granted') {
+          const token = localStorage.getItem('token') || '';
+          const success = await subscribeUserToPush(token);
+          if (success) {
+            setPushStatusMessage('Notifiche attivate con successo! 🎉');
+          } else {
+            setPushStatusMessage('Errore di registrazione sul server.');
+          }
+        } else {
+          setPushStatusMessage('Permesso notifiche negato.');
+        }
+      } catch (err) {
+        setPushStatusMessage('Errore durante l\'attivazione.');
+      }
+    } else {
+      setPushStatusMessage('Notifiche non supportate.');
+    }
+  };
   const [panY, setPanY] = useState(0);
 
   const [editingExpIndex, setEditingExpIndex] = useState<number | null>(null);
@@ -2990,6 +3024,53 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       {activeTab === 'notifications' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
+          {/* PWA Push Notification Activation Banner */}
+          {isPushSupported && pushPermission !== 'granted' && (
+            <div 
+              className="glass-card" 
+              style={{ 
+                padding: '16px', 
+                background: 'rgba(2, 132, 199, 0.08)', 
+                borderLeft: '4px solid var(--accent-blue)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '1.2rem' }}>🔔</span>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                  Attiva le Notifiche a Tendina
+                </div>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                Ricevi un avviso sul telefono in tempo reale non appena un'azienda visualizza il tuo profilo, ti invia una proposta di lavoro o ti richiede un incontro!
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+                <button 
+                  onClick={handleEnablePush}
+                  style={{ 
+                    padding: '6px 14px', 
+                    borderRadius: '6px', 
+                    border: 'none', 
+                    background: 'var(--accent-blue)', 
+                    color: '#fff', 
+                    fontSize: '0.78rem', 
+                    fontWeight: 600, 
+                    cursor: 'pointer' 
+                  }}
+                >
+                  Abilita Notifiche
+                </button>
+                {pushStatusMessage && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--accent-blue)', fontWeight: 500 }}>
+                    {pushStatusMessage}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Proposte di Lavoro Ricevute dalle Aziende */}
           <div>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#000', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>

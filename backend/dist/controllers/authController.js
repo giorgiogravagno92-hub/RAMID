@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkVerificationStatus = exports.verifyOtp = exports.sendOtp = exports.verifyEmail = exports.socialLoginSimulation = exports.me = exports.login = exports.register = exports.otpStore = void 0;
+exports.pushUnsubscribe = exports.pushSubscribe = exports.checkVerificationStatus = exports.verifyOtp = exports.sendOtp = exports.verifyEmail = exports.socialLoginSimulation = exports.me = exports.login = exports.register = exports.otpStore = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = __importDefault(require("../prisma"));
@@ -577,3 +577,51 @@ const checkVerificationStatus = async (req, res) => {
     }
 };
 exports.checkVerificationStatus = checkVerificationStatus;
+const pushSubscribe = async (req, res) => {
+    try {
+        const { endpoint, keys } = req.body;
+        if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+            return res.status(400).json({ error: 'Dati sottoscrizione non completi.' });
+        }
+        await prisma_1.default.pushSubscription.upsert({
+            where: { endpoint },
+            update: {
+                userId: req.user.id,
+                p256dh: keys.p256dh,
+                auth: keys.auth
+            },
+            create: {
+                userId: req.user.id,
+                endpoint,
+                p256dh: keys.p256dh,
+                auth: keys.auth
+            }
+        });
+        res.status(201).json({ success: true });
+    }
+    catch (error) {
+        console.error('Error in pushSubscribe:', error);
+        res.status(500).json({ error: 'Errore durante la registrazione delle notifiche push.' });
+    }
+};
+exports.pushSubscribe = pushSubscribe;
+const pushUnsubscribe = async (req, res) => {
+    try {
+        const { endpoint } = req.body;
+        if (!endpoint) {
+            return res.status(400).json({ error: 'Endpoint richiesto.' });
+        }
+        await prisma_1.default.pushSubscription.deleteMany({
+            where: {
+                endpoint,
+                userId: req.user.id
+            }
+        });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('Error in pushUnsubscribe:', error);
+        res.status(500).json({ error: 'Errore durante la rimozione delle notifiche push.' });
+    }
+};
+exports.pushUnsubscribe = pushUnsubscribe;

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.uploadIdDocument = exports.deleteProposal = exports.updateProposal = exports.getProposals = exports.createProposal = exports.updateCompanyProfile = exports.requestInterview = exports.getFavorites = exports.toggleFavorite = exports.getWorkerDetails = exports.updateProfile = exports.getProfile = exports.searchWorkers = void 0;
 const prisma_1 = __importDefault(require("../prisma"));
+const pushService_1 = require("../utils/pushService");
 const searchWorkers = async (req, res) => {
     try {
         const { profession, city, province, region, availabilityStatus, skills, hasLicense, hasCar, desiredContract, educationLevel, educationField } = req.query;
@@ -319,6 +320,7 @@ const getWorkerDetails = async (req, res) => {
                 type: 'PROFILE_VIEW'
             }
         });
+        (0, pushService_1.sendPushNotification)(worker.userId, 'Profilo Visualizzato', `${companyName} ha appena visualizzato il tuo profilo.`, '/dashboard').catch(err => console.error('Push error:', err));
         res.json(worker);
     }
     catch (error) {
@@ -423,6 +425,7 @@ const requestInterview = async (req, res) => {
                 type: 'INTERVIEW_REQUEST'
             }
         });
+        (0, pushService_1.sendPushNotification)(worker.userId, 'Proposta Iniziale', `${companyName} ti ha inviato una proposta iniziale.`, '/dashboard').catch(err => console.error('Push error:', err));
         res.json({ success: true, request: interviewRequest });
     }
     catch (error) {
@@ -862,6 +865,7 @@ const notifyMatchingWorkersOfProposal = async (proposal) => {
                         type: 'NEW_PROPOSAL'
                     }
                 });
+                (0, pushService_1.sendPushNotification)(worker.userId, `Nuova Proposta da ${companyName} 💼`, `Hai ricevuto una proposta di lavoro per la posizione di: ${professionsStr}.`, '/dashboard').catch(err => console.error('Push error:', err));
                 // B. Simulated email notification
                 const emailSubject = `Nuova proposta di lavoro per te da ${companyName}!`;
                 const emailBody = `Da: "Ramid Staff" <info@ramid.it>

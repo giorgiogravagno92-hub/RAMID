@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.respondToJobProposal = exports.getProposalsForWorker = exports.uploadPhoto = exports.uploadCv = exports.respondToInterviewRequest = exports.getInterviewRequests = exports.markNotificationRead = exports.getNotifications = exports.toggleAvailability = exports.updateProfile = exports.getProfile = void 0;
 const prisma_1 = __importDefault(require("../prisma"));
+const pushService_1 = require("../utils/pushService");
 const SIGLA_TO_PROVINCE = {
     "AG": "Agrigento", "AL": "Alessandria", "AN": "Ancona", "AO": "Aosta", "AR": "Arezzo",
     "AP": "Ascoli Piceno", "AT": "Asti", "AV": "Avellino", "BA": "Bari", "BT": "Barletta-Andria-Trani",
@@ -315,6 +316,7 @@ const respondToInterviewRequest = async (req, res) => {
                 type: status === 'ACCEPTED' ? `ACCEPTED_CONTACT:${profile.id}` : 'MESSAGE'
             }
         });
+        (0, pushService_1.sendPushNotification)(updatedRequest.company.userId, 'Risposta a Proposta Iniziale', `${profile.firstName} ${profile.lastName} ha risposto: "${statusText}".`, '/dashboard').catch(err => console.error('Push error:', err));
         res.json(updatedRequest);
     }
     catch (error) {
@@ -680,6 +682,7 @@ const respondToJobProposal = async (req, res) => {
                     type: `ACCEPTED_CONTACT:${worker.id}`
                 }
             });
+            (0, pushService_1.sendPushNotification)(proposal.company.userId, 'Candidato Ha Accettato!', `Il candidato ${worker.firstName} ${worker.lastName} (${worker.profession}) ha accettato la tua proposta.`, '/dashboard').catch(err => console.error('Push error:', err));
         }
         res.json(response);
     }

@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import prisma from '../prisma';
+import { sendPushNotification } from '../utils/pushService';
 
 export const searchWorkers = async (req: any, res: Response) => {
   try {
@@ -373,6 +374,13 @@ export const getWorkerDetails = async (req: any, res: Response) => {
       }
     });
 
+    sendPushNotification(
+      worker.userId,
+      'Profilo Visualizzato',
+      `${companyName} ha appena visualizzato il tuo profilo.`,
+      '/dashboard'
+    ).catch(err => console.error('Push error:', err));
+
     res.json(worker);
   } catch (error: any) {
     console.error('Error fetching worker details:', error);
@@ -487,6 +495,13 @@ export const requestInterview = async (req: any, res: Response) => {
         type: 'INTERVIEW_REQUEST'
       }
     });
+
+    sendPushNotification(
+      worker.userId,
+      'Proposta Iniziale',
+      `${companyName} ti ha inviato una proposta iniziale.`,
+      '/dashboard'
+    ).catch(err => console.error('Push error:', err));
 
     res.json({ success: true, request: interviewRequest });
   } catch (error: any) {
@@ -953,6 +968,13 @@ const notifyMatchingWorkersOfProposal = async (proposal: any) => {
             type: 'NEW_PROPOSAL'
           }
         });
+
+        sendPushNotification(
+          worker.userId,
+          `Nuova Proposta da ${companyName} 💼`,
+          `Hai ricevuto una proposta di lavoro per la posizione di: ${professionsStr}.`,
+          '/dashboard'
+        ).catch(err => console.error('Push error:', err));
 
         // B. Simulated email notification
         const emailSubject = `Nuova proposta di lavoro per te da ${companyName}!`;

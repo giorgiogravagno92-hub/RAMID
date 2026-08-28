@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import prisma from '../prisma';
+import { sendPushNotification } from '../utils/pushService';
 
 const SIGLA_TO_PROVINCE: Record<string, string> = {
   "AG": "Agrigento", "AL": "Alessandria", "AN": "Ancona", "AO": "Aosta", "AR": "Arezzo",
@@ -367,6 +368,13 @@ export const respondToInterviewRequest = async (req: any, res: Response) => {
         type: status === 'ACCEPTED' ? `ACCEPTED_CONTACT:${profile.id}` : 'MESSAGE'
       }
     });
+
+    sendPushNotification(
+      updatedRequest.company.userId,
+      'Risposta a Proposta Iniziale',
+      `${profile.firstName} ${profile.lastName} ha risposto: "${statusText}".`,
+      '/dashboard'
+    ).catch(err => console.error('Push error:', err));
 
     res.json(updatedRequest);
   } catch (error: any) {
@@ -752,6 +760,13 @@ export const respondToJobProposal = async (req: any, res: Response) => {
           type: `ACCEPTED_CONTACT:${worker.id}`
         }
       });
+
+      sendPushNotification(
+        proposal.company.userId,
+        'Candidato Ha Accettato!',
+        `Il candidato ${worker.firstName} ${worker.lastName} (${worker.profession}) ha accettato la tua proposta.`,
+        '/dashboard'
+      ).catch(err => console.error('Push error:', err));
     }
 
     res.json(response);

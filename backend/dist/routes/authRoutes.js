@@ -13,4 +13,7 @@ router.post('/social-login', authController_1.socialLoginSimulation);
 router.post('/send-otp', rateLimiter_1.sendOtpLimiter, authController_1.sendOtp);
 router.post('/verify-otp', rateLimiter_1.verifyOtpLimiter, authController_1.verifyOtp);
 router.get('/verification-status', authController_1.checkVerificationStatus);
+// Push Notifications subscription routes
+router.post('/push-subscribe', auth_1.authenticateToken, authController_1.pushSubscribe);
+router.post('/push-unsubscribe', auth_1.authenticateToken, authController_1.pushUnsubscribe);
 exports.default = router;

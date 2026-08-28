@@ -653,3 +653,54 @@ export const checkVerificationStatus = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Errore interno del server.' });
   }
 };
+
+export const pushSubscribe = async (req: any, res: Response) => {
+  try {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+      return res.status(400).json({ error: 'Dati sottoscrizione non completi.' });
+    }
+
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      update: {
+        userId: req.user.id,
+        p256dh: keys.p256dh,
+        auth: keys.auth
+      },
+      create: {
+        userId: req.user.id,
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth
+      }
+    });
+
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Error in pushSubscribe:', error);
+    res.status(500).json({ error: 'Errore durante la registrazione delle notifiche push.' });
+  }
+};
+
+export const pushUnsubscribe = async (req: any, res: Response) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Endpoint richiesto.' });
+    }
+
+    await prisma.pushSubscription.deleteMany({
+      where: {
+        endpoint,
+        userId: req.user.id
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error in pushUnsubscribe:', error);
+    res.status(500).json({ error: 'Errore durante la rimozione delle notifiche push.' });
+  }
+};
+
