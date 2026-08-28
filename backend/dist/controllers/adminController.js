@@ -1,21 +1,23 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendSystemNotification = exports.deleteUser = exports.getCompanies = exports.getUsers = exports.getStats = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../prisma"));
 const getStats = async (req, res) => {
     try {
-        const workersCount = await prisma.workerProfile.count();
-        const companiesCount = await prisma.companyProfile.count();
-        const interviewsCount = await prisma.interviewRequest.count();
-        const favoritesCount = await prisma.favorite.count();
-        const workersByStatus = await prisma.workerProfile.groupBy({
+        const workersCount = await prisma_1.default.workerProfile.count();
+        const companiesCount = await prisma_1.default.companyProfile.count();
+        const interviewsCount = await prisma_1.default.interviewRequest.count();
+        const favoritesCount = await prisma_1.default.favorite.count();
+        const workersByStatus = await prisma_1.default.workerProfile.groupBy({
             by: ['availabilityStatus'],
             _count: {
                 availabilityStatus: true
             }
         });
-        const activeInterviewsByStatus = await prisma.interviewRequest.groupBy({
+        const activeInterviewsByStatus = await prisma_1.default.interviewRequest.groupBy({
             by: ['status'],
             _count: {
                 status: true
@@ -46,7 +48,7 @@ const getStats = async (req, res) => {
 exports.getStats = getStats;
 const getUsers = async (req, res) => {
     try {
-        const users = await prisma.user.findMany({
+        const users = await prisma_1.default.user.findMany({
             include: {
                 workerProfile: true,
                 companyProfile: true
@@ -62,7 +64,7 @@ const getUsers = async (req, res) => {
 exports.getUsers = getUsers;
 const getCompanies = async (req, res) => {
     try {
-        const companies = await prisma.companyProfile.findMany({
+        const companies = await prisma_1.default.companyProfile.findMany({
             include: {
                 user: {
                     select: { email: true, createdAt: true }
@@ -79,7 +81,7 @@ exports.getCompanies = getCompanies;
 const deleteUser = async (req, res) => {
     try {
         const { id } = req.params; // User ID
-        await prisma.user.delete({
+        await prisma_1.default.user.delete({
             where: { id }
         });
         res.json({ success: true, message: 'User and all related profiles deleted successfully.' });
@@ -100,7 +102,7 @@ const sendSystemNotification = async (req, res) => {
         if (targetRole && targetRole !== 'ALL') {
             whereClause.role = targetRole;
         }
-        const users = await prisma.user.findMany({ where: whereClause });
+        const users = await prisma_1.default.user.findMany({ where: whereClause });
         // Create notifications for all target users
         const notificationsData = users.map((user) => ({
             userId: user.id,
@@ -108,7 +110,7 @@ const sendSystemNotification = async (req, res) => {
             message,
             type: 'MESSAGE'
         }));
-        await prisma.notification.createMany({
+        await prisma_1.default.notification.createMany({
             data: notificationsData
         });
         res.json({

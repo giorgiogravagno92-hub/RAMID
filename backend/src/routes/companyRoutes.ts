@@ -11,7 +11,8 @@ import {
   createProposal,
   getProposals,
   updateProposal,
-  deleteProposal
+  deleteProposal,
+  uploadIdDocument
 } from '../controllers/companyController';
 import {
   getNotifications,
@@ -26,6 +27,7 @@ router.use(authenticateToken as any);
 router.get('/search', requireRole(['COMPANY', 'ADMIN']) as any, searchWorkers as any);
 router.get('/profile', requireRole(['COMPANY']) as any, getProfile as any);
 router.put('/profile', requireRole(['COMPANY']) as any, updateCompanyProfile as any);
+router.post('/upload-id', requireRole(['COMPANY']) as any, uploadIdDocument as any);
 router.get('/workers/:id', requireRole(['COMPANY']) as any, getWorkerDetails as any);
 router.post('/favorites', requireRole(['COMPANY']) as any, toggleFavorite as any);
 router.get('/favorites', requireRole(['COMPANY']) as any, getFavorites as any);

@@ -200,7 +200,7 @@ export const AdminDashboard: React.FC = () => {
         await api.admin.deleteUser(id);
         
         // Check if self-deletion
-        const token = localStorage.getItem('sono_qui_token');
+        const token = localStorage.getItem('ramid_token');
         let currentUserId = '';
         if (token) {
           try {
@@ -211,7 +211,7 @@ export const AdminDashboard: React.FC = () => {
 
         if (id === currentUserId) {
           alert('Hai eliminato il tuo account amministratore. Verrai disconnesso automaticamente.');
-          localStorage.removeItem('sono_qui_token');
+          localStorage.removeItem('ramid_token');
           window.location.href = '/';
           return;
         }
@@ -298,7 +298,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div className="admin-stats-subgrid" style={{ display: 'grid', gap: '24px' }}>
             <div className="glass-card">
               <h3 style={{ marginBottom: '16px', fontSize: '1rem' }}>Distribuzione Disponibilità</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -342,32 +342,34 @@ export const AdminDashboard: React.FC = () => {
       {activeSubTab === 'users' && (
         <div className="glass-card">
           <h3>Candidati Registrati</h3>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Professione</th>
-                <th>Città</th>
-                <th>Disponibilità</th>
-                <th>Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((worker) => (
-                <tr key={worker.id}>
-                  <td>{worker.firstName} {worker.lastName}</td>
-                  <td>{worker.profession}</td>
-                  <td>{worker.city}</td>
-                  <td>{worker.availabilityStatus.replace('_', ' ')}</td>
-                  <td>
-                    <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={() => handleDeleteUser(worker.userId)}>
-                      Elimina
-                    </button>
-                  </td>
+          <div className="table-responsive">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Professione</th>
+                  <th>Città</th>
+                  <th>Disponibilità</th>
+                  <th>Azioni</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((worker) => (
+                  <tr key={worker.id}>
+                    <td>{worker.firstName} {worker.lastName}</td>
+                    <td>{worker.profession}</td>
+                    <td>{worker.city}</td>
+                    <td>{worker.availabilityStatus.replace('_', ' ')}</td>
+                    <td>
+                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={() => handleDeleteUser(worker.userId)}>
+                        Elimina
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -375,32 +377,34 @@ export const AdminDashboard: React.FC = () => {
       {activeSubTab === 'companies' && (
         <div className="glass-card">
           <h3>Aziende Registrate</h3>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Azienda</th>
-                <th>Settore</th>
-                <th>Sede</th>
-                <th>Referente</th>
-                <th>Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((company) => (
-                <tr key={company.id}>
-                  <td>{company.companyName}</td>
-                  <td>{company.industry}</td>
-                  <td>{company.city}</td>
-                  <td>{company.contactPerson}</td>
-                  <td>
-                    <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={() => handleDeleteUser(company.userId)}>
-                      Elimina
-                    </button>
-                  </td>
+          <div className="table-responsive">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Azienda</th>
+                  <th>Settore</th>
+                  <th>Sede</th>
+                  <th>Referente</th>
+                  <th>Azioni</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {companies.map((company) => (
+                  <tr key={company.id}>
+                    <td>{company.companyName}</td>
+                    <td>{company.industry}</td>
+                    <td>{company.city}</td>
+                    <td>{company.contactPerson}</td>
+                    <td>
+                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={() => handleDeleteUser(company.userId)}>
+                        Elimina
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -411,65 +415,67 @@ export const AdminDashboard: React.FC = () => {
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '24px' }}>
             In questa sezione riservata puoi visualizzare tutti gli utenti registrati sul portale con le relative email e password in chiaro. Puoi anche cancellare qualsiasi utente (incluso te stesso).
           </p>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Nome / Dettaglio</th>
-                <th>Email</th>
-                <th>Password (In Chiaro)</th>
-                <th>Ruolo</th>
-                <th>Stato</th>
-                <th>Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allAccounts.map((acc: any) => {
-                const displayName = acc.role === 'WORKER' 
-                  ? `${acc.workerProfile?.firstName || ''} ${acc.workerProfile?.lastName || ''} (Candidato)`
-                  : acc.role === 'COMPANY' 
-                    ? `${acc.companyProfile?.companyName || 'Azienda'} (Recruiter)` 
-                    : 'Amministratore';
-                
-                return (
-                  <tr key={acc.id}>
-                    <td><strong>{displayName}</strong></td>
-                    <td><code>{acc.email}</code></td>
-                    <td>
-                      <span style={{ color: 'var(--accent-yellow)', fontFamily: 'monospace', fontWeight: 600 }}>
-                        {acc.plainPassword || 'password123 (Seeded)'}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ 
-                        padding: '3px 8px', 
-                        borderRadius: '6px', 
-                        fontSize: '0.72rem', 
-                        fontWeight: 700,
-                        background: acc.role === 'ADMIN' ? 'rgba(239,68,68,0.15)' : (acc.role === 'COMPANY' ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)'),
-                        color: acc.role === 'ADMIN' ? 'var(--accent-red)' : (acc.role === 'COMPANY' ? 'var(--accent-blue)' : 'var(--accent-green)')
-                      }}>
-                        {acc.role}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.85rem' }}>
-                        {acc.emailVerified ? '🟢 Attivo' : '📧 In Attesa Verifica'}
-                      </span>
-                    </td>
-                    <td>
-                      <button 
-                        className="btn btn-danger" 
-                        style={{ padding: '6px 10px', fontSize: '0.75rem', fontWeight: 700 }} 
-                        onClick={() => handleDeleteUser(acc.id)}
-                      >
-                        Elimina
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-responsive">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Nome / Dettaglio</th>
+                  <th>Email</th>
+                  <th>Password (In Chiaro)</th>
+                  <th>Ruolo</th>
+                  <th>Stato</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allAccounts.map((acc: any) => {
+                  const displayName = acc.role === 'WORKER' 
+                    ? `${acc.workerProfile?.firstName || ''} ${acc.workerProfile?.lastName || ''} (Candidato)`
+                    : acc.role === 'COMPANY' 
+                      ? `${acc.companyProfile?.companyName || 'Azienda'} (Recruiter)` 
+                      : 'Amministratore';
+                  
+                  return (
+                    <tr key={acc.id}>
+                      <td><strong>{displayName}</strong></td>
+                      <td><code>{acc.email}</code></td>
+                      <td>
+                        <span style={{ color: 'var(--accent-yellow)', fontFamily: 'monospace', fontWeight: 600 }}>
+                          {acc.plainPassword || 'password123 (Seeded)'}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ 
+                          padding: '3px 8px', 
+                          borderRadius: '6px', 
+                          fontSize: '0.72rem', 
+                          fontWeight: 700,
+                          background: acc.role === 'ADMIN' ? 'rgba(239,68,68,0.15)' : (acc.role === 'COMPANY' ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)'),
+                          color: acc.role === 'ADMIN' ? 'var(--accent-red)' : (acc.role === 'COMPANY' ? 'var(--accent-blue)' : 'var(--accent-green)')
+                        }}>
+                          {acc.role}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.85rem' }}>
+                          {acc.emailVerified ? '🟢 Attivo' : '📧 In Attesa Verifica'}
+                        </span>
+                      </td>
+                      <td>
+                        <button 
+                          className="btn btn-danger" 
+                          style={{ padding: '6px 10px', fontSize: '0.75rem', fontWeight: 700 }} 
+                          onClick={() => handleDeleteUser(acc.id)}
+                        >
+                          Elimina
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

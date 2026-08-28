@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
-import { PROFESSIONS, CITIES, PROVINCE_SIGLE, ORGANIZATIONAL_SKILLS_LIST, COMMUNICATIVE_SKILLS_LIST } from '../utils/constants';
+import { api, BACKEND_URL } from '../utils/api';
+import { PROFESSIONS, CITIES, PROVINCE_SIGLE, ORGANIZATIONAL_SKILLS_LIST, COMMUNICATIVE_SKILLS_LIST, COMPANY_SECTORS } from '../utils/constants';
 
 interface CompanyDashboardProps {
   onNotifyMobile?: (title: string, message: string) => void;
@@ -52,6 +52,15 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileFormData, setProfileFormData] = useState<any>({});
 
+  // Onboarding complete profile form states
+  const [onboardAddress, setOnboardAddress] = useState('');
+  const [onboardCity, setOnboardCity] = useState('');
+  const [onboardProvince, setOnboardProvince] = useState('');
+  const [onboardSigla, setOnboardSigla] = useState('');
+  const [onboardSector, setOnboardSector] = useState('');
+  const [onboardError, setOnboardError] = useState('');
+  const [onboardLoading, setOnboardLoading] = useState(false);
+
   // Proposal Creation / Edit states
   const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
   const [selectedProfessions, setSelectedProfessions] = useState<string[]>([]);
@@ -82,6 +91,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
   // Notes
   const [notes, setNotes] = useState('');
+  const [selectedContracts, setSelectedContracts] = useState<string[]>([]);
 
   // Saved Proposals
   const [proposals, setProposals] = useState<any[]>([]);
@@ -129,6 +139,11 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
       if (prof) {
         setCompanyProfile(prof);
         setProfileFormData(prof);
+        setOnboardAddress(prof.address || '');
+        setOnboardCity(prof.city || '');
+        setOnboardProvince(prof.province || '');
+        setOnboardSigla(prof.sigla || (prof.province ? (PROVINCE_SIGLE[prof.province] || '') : ''));
+        setOnboardSector(prof.industry && prof.industry !== 'Altro' ? prof.industry : '');
         if (!editingProposalId) {
           setLoc1Address(prof.address || '');
           setLoc1City(prof.city || '');
@@ -139,10 +154,50 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     } catch (err) {
       console.log('Error fetching company profile, using default mock');
       setProfileFormData(companyProfile);
+      setOnboardAddress(companyProfile.address || '');
+      setOnboardCity(companyProfile.city || '');
+      setOnboardProvince(companyProfile.province || '');
+      setOnboardSigla(companyProfile.sigla || '');
+      setOnboardSector(companyProfile.industry && companyProfile.industry !== 'Altro' ? companyProfile.industry : '');
       setLoc1Address(companyProfile.address || '');
       setLoc1City(companyProfile.city || '');
       setLoc1Province(companyProfile.province || '');
       setLoc1Sigla(companyProfile.sigla || '');
+    }
+  };
+
+  const handleOnboardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOnboardError('');
+    const isPF = companyProfile.companyType === 'PERSONA_FISICA';
+    if (!onboardCity.trim() || !onboardProvince || (!isPF && (!onboardAddress.trim() || !onboardSector))) {
+      setOnboardError('Tutti i campi obbligatori sono richiesti.');
+      return;
+    }
+    setOnboardLoading(true);
+    try {
+      const updated = await api.company.updateProfile({
+        ...companyProfile,
+        address: isPF ? 'N/D' : onboardAddress,
+        city: onboardCity,
+        province: onboardProvince,
+        sigla: onboardSigla,
+        industry: isPF ? 'Persona Fisica' : onboardSector,
+        contactPerson: companyProfile.contactPerson || companyProfile.companyName || 'Referente'
+      });
+      if (updated) {
+        setCompanyProfile(updated);
+        setProfileFormData(updated);
+        // Sync creation locations
+        setLoc1Address(onboardAddress);
+        setLoc1City(onboardCity);
+        setLoc1Province(onboardProvince);
+        setLoc1Sigla(onboardSigla);
+      }
+    } catch (err: any) {
+      setOnboardError(err.message || 'Errore nel salvataggio del profilo.');
+    } finally {
+      setOnboardLoading(false);
     }
   };
 
@@ -169,6 +224,24 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
       setCompanyProfile(profileFormData);
       setIsEditingProfile(false);
     }
+  };
+
+  const handleIdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      try {
+        const res = await api.company.uploadId({ base64Data });
+        setCompanyProfile(res.company || { ...companyProfile, idDocumentUrl: res.idDocumentUrl });
+        alert("Documento d'identità caricato con successo!");
+      } catch (err: any) {
+        alert(err.message || 'Errore durante il caricamento del documento.');
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddProfession = (prof: string) => {
@@ -199,6 +272,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     setMinSalary('');
     setMaxSalary('');
     setNotes('');
+    setSelectedContracts([]);
   };
 
   const handleEditProposal = (prop: any) => {
@@ -249,6 +323,16 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     setMinSalary(prop.minSalary ? formatNumberThousands(prop.minSalary) : '');
     setMaxSalary(prop.maxSalary ? formatNumberThousands(prop.maxSalary) : '');
     setNotes(prop.notes || '');
+    
+    let parsedContracts: string[] = [];
+    try {
+      parsedContracts = JSON.parse(prop.contractType || '[]');
+    } catch (e) {
+      if (prop.contractType && prop.contractType !== 'Nessuna preferenza') {
+        parsedContracts = [prop.contractType];
+      }
+    }
+    setSelectedContracts(parsedContracts);
 
     setActiveTab('create_proposal');
   };
@@ -280,6 +364,21 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
       return;
     }
 
+    if (targetStatus === 'ACTIVE') {
+      if (companyProfile.companyType === 'PERSONA_FISICA' && !companyProfile.idDocumentUrl) {
+        alert("Errore: La persona fisica recruiter deve caricare obbligatoriamente il documento d'identità nella sezione 'Profilo' prima di poter pubblicare un annuncio.");
+        return;
+      }
+      if (selectedContracts.length === 0) {
+        alert('La tipologia di contratto offerto è obbligatoria per pubblicare la proposta.');
+        return;
+      }
+    }
+    if (selectedContracts.length > 2) {
+      alert('Puoi selezionare al massimo 2 tipologie di contratto.');
+      return;
+    }
+
     const locationsArr = [
       { address: loc1Address, city: loc1City, province: loc1Province, sigla: loc1Sigla }
     ];
@@ -292,12 +391,13 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
       professions: JSON.stringify(selectedProfessions),
       locations: JSON.stringify(locationsArr),
       educationTitle: JSON.stringify(selectedEdus),
-      hasLicense,
-      hasCar,
+      hasLicense: false,
+      hasCar: false,
       minSalary,
       maxSalary,
       notes,
-      status: targetStatus
+      status: targetStatus,
+      contractType: JSON.stringify(selectedContracts)
     };
 
     try {
@@ -341,8 +441,118 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     }
   };
 
+  const isProfileIncomplete = companyProfile.companyType === 'PERSONA_FISICA'
+    ? (!companyProfile.city || !companyProfile.province || !companyProfile.contactPhone)
+    : (!companyProfile.address || !companyProfile.city || !companyProfile.province || !companyProfile.sigla || !companyProfile.industry);
+
+  if (isProfileIncomplete) {
+    return (
+      <div className="container" style={{ display: 'flex', justifyContent: 'center', padding: '60px 24px' }}>
+        <div className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '32px', textAlign: 'left' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🏢</div>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '8px', color: '#fff' }}>Completa il tuo Profilo Aziendale</h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              Per poter inserire proposte di lavoro e visualizzare i candidati, inserisci i dettagli della sede operativa e il settore della tua azienda.
+            </p>
+          </div>
+
+          {onboardError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)', color: 'var(--accent-red)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem' }}>
+              ⚠️ {onboardError}
+            </div>
+          )}
+
+          <form onSubmit={handleOnboardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {companyProfile.companyType !== 'PERSONA_FISICA' && (
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#94a3b8' }}>Indirizzo sede operativa *</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={onboardAddress} 
+                  onChange={(e) => setOnboardAddress(formatCapitalizedWords(e.target.value))} 
+                  placeholder="es. Via Roma 12"
+                  required 
+                />
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#94a3b8' }}>Città *</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={onboardCity} 
+                  onChange={(e) => setOnboardCity(formatCapitalizedWords(e.target.value))} 
+                  placeholder="es. Milano"
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#94a3b8' }}>Provincia *</label>
+                <select 
+                  className="form-control" 
+                  value={onboardProvince} 
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    setOnboardProvince(selected);
+                    setOnboardSigla(PROVINCE_SIGLE[selected] || '');
+                  }}
+                  required
+                >
+                  <option value="">Provincia</option>
+                  {CITIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#94a3b8' }}>Sigla</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={onboardSigla} 
+                  readOnly 
+                  style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'center' }}
+                />
+              </div>
+            </div>
+
+            {companyProfile.companyType !== 'PERSONA_FISICA' && (
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#94a3b8' }}>Settore Operativo *</label>
+                <select 
+                  className="form-control" 
+                  value={onboardSector} 
+                  onChange={(e) => setOnboardSector(e.target.value)} 
+                  required
+                >
+                  <option value="">-- Seleziona Settore --</option>
+                  {COMPANY_SECTORS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              style={{ width: '100%', padding: '14px', marginTop: '10px' }}
+              disabled={onboardLoading}
+            >
+              {onboardLoading ? 'Salvataggio in corso...' : 'Salva e Continua'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '24px', minHeight: '80vh' }}>
+    <div className="dashboard-grid-layout" style={{ gap: '24px', minHeight: '80vh' }}>
       
       {/* SIDEBAR NAVIGATION */}
       <aside className="glass-card" style={{ padding: '20px', height: 'fit-content' }}>
@@ -552,7 +762,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
             {isEditingProfile ? (
               <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-grid-2">
                   <div className="form-group">
                     <label className="form-label">Tipologia Soggetto</label>
                     <select
@@ -704,6 +914,47 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Telefono di Contatto</div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>📞 {companyProfile.contactPhone || 'Telefono non indicato'}</div>
                 </div>
+                {companyProfile.companyType === 'PERSONA_FISICA' && (
+                  <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', gridColumn: 'span 2' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>🪪 Documento d'identità Recruiter (Obbligatorio)</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                      {companyProfile.idDocumentUrl ? (
+                        <span style={{ color: 'var(--accent-green)', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ✓ Documento caricato correttamente
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--accent-red)', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ⚠️ Documento mancante (Obbligatorio per pubblicare annunci)
+                        </span>
+                      )}
+                      
+                      <label 
+                        className="btn btn-secondary" 
+                        style={{ margin: 0, padding: '6px 12px', fontSize: '0.75rem', cursor: 'pointer' }}
+                      >
+                        📁 {companyProfile.idDocumentUrl ? 'Aggiorna File' : 'Seleziona Documento (Immagine)'}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }} 
+                          onChange={handleIdUpload} 
+                        />
+                      </label>
+
+                      {companyProfile.idDocumentUrl && (
+                        <a 
+                          href={companyProfile.idDocumentUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="btn btn-primary" 
+                          style={{ padding: '6px 12px', fontSize: '0.75rem', textDecoration: 'none', display: 'inline-block' }}
+                        >
+                          👁️ Visualizza
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -932,69 +1183,61 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
               <div>
                 <label className="form-label" style={{ fontWeight: 700, marginBottom: '6px', display: 'block', fontSize: '0.9rem' }}>
-                  Titoli di Studio Richiesti (Seleziona uno o più)
+                  Titolo di Studio Richiesto (Seleziona uno)
                 </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
-                  {['Nessuna preferenza', 'Licenza Media', 'Diploma', 'Laurea triennale', 'Laurea specialistica', 'Laurea Magistrale', 'Master'].map((eduOption) => {
-                    const isSelected = selectedEdus.includes(eduOption);
+                <select
+                  className="form-control"
+                  value={selectedEdus[0] || 'Nessuna preferenza'}
+                  onChange={(e) => setSelectedEdus([e.target.value])}
+                >
+                  <option value="Nessuna preferenza">Nessuna preferenza (Tutti i titoli)</option>
+                  <option value="Licenza Media">Licenza Media</option>
+                  <option value="Diploma">Diploma</option>
+                  <option value="Laurea triennale">Laurea triennale</option>
+                  <option value="Laurea specialistica / magistrale">Laurea specialistica / magistrale</option>
+                  <option value="Master">Master</option>
+                </select>
+              </div>
+
+              {/* 4. Tipologia Contratto Offerto (Massimo 2) */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 700, marginBottom: '6px', display: 'block', fontSize: '0.9rem' }}>
+                  Tipologia di Contratto Offerto (Seleziona massimo 2)
+                </label>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '1fr 1fr', 
+                  gap: '10px',
+                  background: '#f1f5f9', 
+                  padding: '12px', 
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  {['Determinato', 'Indeterminato', 'Part-time', 'Apprendistato', 'Partita iva', 'A chiamata'].map((c) => {
+                    const isChecked = selectedContracts.includes(c);
                     return (
-                      <button
-                        key={eduOption}
-                        type="button"
-                        onClick={() => {
-                          if (eduOption === 'Nessuna preferenza') {
-                            setSelectedEdus(['Nessuna preferenza']);
-                          } else {
-                            let newEdus = selectedEdus.filter(e => e !== 'Nessuna preferenza');
-                            if (newEdus.includes(eduOption)) {
-                              newEdus = newEdus.filter(e => e !== eduOption);
-                              if (newEdus.length === 0) {
-                                newEdus = ['Nessuna preferenza'];
-                              }
+                      <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer', color: '#0f172a', fontWeight: 600 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked} 
+                          onChange={(e) => {
+                            if (isChecked) {
+                              setSelectedContracts(selectedContracts.filter(item => item !== c));
                             } else {
-                              newEdus.push(eduOption);
+                              if (selectedContracts.length >= 2) {
+                                alert('Puoi selezionare al massimo 2 tipologie di contratto.');
+                                return;
+                              }
+                              setSelectedContracts([...selectedContracts, c]);
                             }
-                            setSelectedEdus(newEdus);
-                          }
-                        }}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '20px',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          background: isSelected ? 'var(--grad-primary)' : 'rgba(255,255,255,0.05)',
-                          color: isSelected ? '#fff' : 'var(--text-secondary)',
-                          border: isSelected ? '1px solid transparent' : '1px solid var(--border-glass)',
-                        }}
-                      >
-                        {eduOption === 'Nessuna preferenza' ? 'Nessuna preferenza (Tutti i titoli)' : eduOption}
-                      </button>
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        {c}
+                      </label>
                     );
                   })}
                 </div>
-              </div>
-
-              {/* 4. Flags Patente & Automunito */}
-              <div style={{ display: 'flex', gap: '20px', background: '#f1f5f9', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
-                  <input
-                    type="checkbox"
-                    checked={hasLicense}
-                    onChange={(e) => setHasLicense(e.target.checked)}
-                  />
-                  🚗 Patente di Guida
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
-                  <input
-                    type="checkbox"
-                    checked={hasCar}
-                    onChange={(e) => setHasCar(e.target.checked)}
-                  />
-                  🚘 Automunito
-                </label>
               </div>
 
               {/* 5. Reddito (Min e Max espresso con separatore di migliaia) */}
@@ -1107,7 +1350,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                   <div key={prop.id} className="glass-card" style={{ padding: '20px', borderLeft: prop.status === 'ACTIVE' ? '4px solid var(--accent-green)' : '4px solid #eab308', position: 'relative' }}>
                     
                     {/* Header bar of proposal card */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div className="responsive-card-header" style={{ marginBottom: '12px' }}>
                       <div>
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
                           {profsList.map((p) => (
@@ -1275,7 +1518,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                     return (
                       <div key={res.id} style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                         
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div className="responsive-card-header" style={{ marginBottom: '12px' }}>
                           <div>
                             <span style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--accent-green)', padding: '2px 8px', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 700 }}>
                               ✅ Contatto Diretto Accettato
@@ -1292,7 +1535,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                           </div>
 
                           {/* Contact Info & CV PDF Link */}
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                          <div className="responsive-card-actions">
                             <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                               📧 Email: {worker.user?.email || 'N/D'}
                             </div>
@@ -1308,7 +1551,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const backendUrl = api.isOffline() ? '' : 'http://localhost:5000';
+                                  const backendUrl = api.isOffline() ? '' : BACKEND_URL;
                                   window.open(backendUrl + worker.cvPdfUrl, '_blank');
                                 }}
                                 className="btn btn-secondary"
@@ -1397,6 +1640,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
               <div>
                 <h5 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Dati di Contatto</h5>
                 <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📧 <strong>Email:</strong> {viewingWorkerCv.user?.email || viewingWorkerCv.email || 'N/D'}</p>
+                <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📞 <strong>Telefono:</strong> {viewingWorkerCv.phone || 'Non specificato'}</p>
                 <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📍 <strong>Residenza:</strong> {viewingWorkerCv.city} ({viewingWorkerCv.sigla || viewingWorkerCv.province})</p>
                 <p style={{ margin: '4px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>🚗 <strong>Patente / Auto:</strong> {[viewingWorkerCv.hasLicense && 'Patente', viewingWorkerCv.hasCar && 'Automunito'].filter(Boolean).join(' • ') || 'Nessuno'}</p>
               </div>
@@ -1422,8 +1666,8 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                   const label = viewingWorkerCv.educationLevel === 'LICENZA_MEDIA' ? 'Licenza Media' : 
                                 viewingWorkerCv.educationLevel === 'DIPLOMA' ? 'Diploma' : 
                                 viewingWorkerCv.educationLevel === 'LAUREA_TRIENNALE' ? 'Laurea triennale' : 
-                                viewingWorkerCv.educationLevel === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica' : 
-                                viewingWorkerCv.educationLevel === 'LAUREA_MAGISTRALE' ? 'Laurea Magistrale' : 'Laurea';
+                                viewingWorkerCv.educationLevel === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica / magistrale' : 
+                                viewingWorkerCv.educationLevel === 'LAUREA_MAGISTRALE' ? 'Laurea specialistica / magistrale' : 'Laurea';
                   return <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{label} {viewingWorkerCv.educationField ? `- ${viewingWorkerCv.educationField}` : ''}</span>;
                 }
                 return (
@@ -1433,8 +1677,8 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                                     edu.level === 'DIPLOMA' ? 'Diploma' : 
                                     edu.level === 'LAUREA' ? 'Laurea triennale' : 
                                     edu.level === 'LAUREA_TRIENNALE' ? 'Laurea triennale' : 
-                                    edu.level === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica' : 
-                                    edu.level === 'LAUREA_MAGISTRALE' ? 'Laurea Magistrale' : 
+                                    edu.level === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica / magistrale' : 
+                                    edu.level === 'LAUREA_MAGISTRALE' ? 'Laurea specialistica / magistrale' : 
                                     edu.level === 'MASTER' ? 'Master' : edu.level;
                       
                       let details = '';
@@ -1653,17 +1897,6 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                   style={{ textDecoration: 'none', display: 'inline-block', fontSize: '0.85rem' }}
                 >
                   📎 Visualizza CV PDF
-                </a>
-              )}
-              {viewingWorkerCv.videoPresentationUrl && (
-                <a 
-                  href={viewingWorkerCv.videoPresentationUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="btn btn-secondary"
-                  style={{ textDecoration: 'none', display: 'inline-block', fontSize: '0.85rem' }}
-                >
-                  🎥 Guarda Video Presentazione
                 </a>
               )}
               <button className="btn btn-secondary" onClick={() => setViewingWorkerCv(null)} style={{ fontSize: '0.85rem' }}>Chiudi</button>

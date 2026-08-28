@@ -40,7 +40,7 @@ export const MobileSimulator: React.FC<MobileSimulatorProps> = ({
           📱 Area Demo Mobile
         </h1>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', maxWidth: '500px' }}>
-          Questo simulatore interattivo mostra l'applicazione <strong>"Sono Qui"</strong> così come appare sui dispositivi mobili (iOS/Android). 
+          Questo simulatore interattivo mostra l'applicazione <strong>"Ramid"</strong> così come appare sui dispositivi mobili (iOS/Android). 
           Puoi testare i flussi dei candidati e delle aziende come se stessi usando un'app nativa.
         </p>
 

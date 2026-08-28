@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteProposal = exports.updateProposal = exports.getProposals = exports.createProposal = exports.updateCompanyProfile = exports.requestInterview = exports.getFavorites = exports.toggleFavorite = exports.getWorkerDetails = exports.updateProfile = exports.getProfile = exports.searchWorkers = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+exports.uploadIdDocument = exports.deleteProposal = exports.updateProposal = exports.getProposals = exports.createProposal = exports.updateCompanyProfile = exports.requestInterview = exports.getFavorites = exports.toggleFavorite = exports.getWorkerDetails = exports.updateProfile = exports.getProfile = exports.searchWorkers = void 0;
+const prisma_1 = __importDefault(require("../prisma"));
 const searchWorkers = async (req, res) => {
     try {
         const { profession, city, province, region, availabilityStatus, skills, hasLicense, hasCar, desiredContract, educationLevel, educationField } = req.query;
@@ -24,7 +26,7 @@ const searchWorkers = async (req, res) => {
         if (hasCar === 'true') {
             whereClause.hasCar = true;
         }
-        let workers = await prisma.workerProfile.findMany({
+        let workers = await prisma_1.default.workerProfile.findMany({
             where: whereClause,
             include: {
                 user: {
@@ -244,7 +246,7 @@ const searchWorkers = async (req, res) => {
 exports.searchWorkers = searchWorkers;
 const getProfile = async (req, res) => {
     try {
-        const profile = await prisma.companyProfile.findUnique({
+        const profile = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!profile) {
@@ -259,8 +261,8 @@ const getProfile = async (req, res) => {
 exports.getProfile = getProfile;
 const updateProfile = async (req, res) => {
     try {
-        const { companyType, companyName, address, vatNumber, firstName, lastName, residenzaCapCitta, fiscalCode, industry, city, contactPerson, contactPhone, logoUrl } = req.body;
-        const profile = await prisma.companyProfile.update({
+        const { companyType, companyName, address, vatNumber, firstName, lastName, residenzaCapCitta, fiscalCode, industry, city, province, sigla, contactPerson, contactPhone, logoUrl } = req.body;
+        const profile = await prisma_1.default.companyProfile.update({
             where: { userId: req.user.id },
             data: {
                 companyType,
@@ -273,6 +275,8 @@ const updateProfile = async (req, res) => {
                 fiscalCode,
                 industry,
                 city: companyType === 'AZIENDA' ? city : residenzaCapCitta,
+                province,
+                sigla,
                 contactPerson: companyType === 'AZIENDA' ? contactPerson : `${firstName} ${lastName}`,
                 contactPhone,
                 logoUrl
@@ -289,7 +293,7 @@ exports.updateProfile = updateProfile;
 const getWorkerDetails = async (req, res) => {
     try {
         const { id } = req.params; // worker profile ID
-        const worker = await prisma.workerProfile.findUnique({
+        const worker = await prisma_1.default.workerProfile.findUnique({
             where: { id },
             include: {
                 user: {
@@ -302,12 +306,12 @@ const getWorkerDetails = async (req, res) => {
             return res.status(404).json({ error: 'Worker not found' });
         }
         // Get company profile to customize notification
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         const companyName = company ? company.companyName : "Un'azienda";
         // Simulate push notification by saving it to the worker's database notifications table
-        await prisma.notification.create({
+        await prisma_1.default.notification.create({
             data: {
                 userId: worker.userId,
                 title: 'Profilo Visualizzato',
@@ -326,13 +330,13 @@ exports.getWorkerDetails = getWorkerDetails;
 const toggleFavorite = async (req, res) => {
     try {
         const { workerId } = req.body;
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!company) {
             return res.status(404).json({ error: 'Company profile not found' });
         }
-        const existingFavorite = await prisma.favorite.findUnique({
+        const existingFavorite = await prisma_1.default.favorite.findUnique({
             where: {
                 companyId_workerId: {
                     companyId: company.id,
@@ -342,14 +346,14 @@ const toggleFavorite = async (req, res) => {
         });
         if (existingFavorite) {
             // Remove favorite
-            await prisma.favorite.delete({
+            await prisma_1.default.favorite.delete({
                 where: { id: existingFavorite.id }
             });
             res.json({ favorited: false });
         }
         else {
             // Add favorite
-            await prisma.favorite.create({
+            await prisma_1.default.favorite.create({
                 data: {
                     companyId: company.id,
                     workerId
@@ -366,13 +370,13 @@ const toggleFavorite = async (req, res) => {
 exports.toggleFavorite = toggleFavorite;
 const getFavorites = async (req, res) => {
     try {
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!company) {
             return res.status(404).json({ error: 'Company profile not found' });
         }
-        const favorites = await prisma.favorite.findMany({
+        const favorites = await prisma_1.default.favorite.findMany({
             where: { companyId: company.id },
             include: {
                 worker: true
@@ -388,20 +392,20 @@ exports.getFavorites = getFavorites;
 const requestInterview = async (req, res) => {
     try {
         const { workerId, message, date } = req.body;
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!company) {
             return res.status(404).json({ error: 'Company profile not found' });
         }
-        const worker = await prisma.workerProfile.findUnique({
+        const worker = await prisma_1.default.workerProfile.findUnique({
             where: { id: workerId }
         });
         if (!worker) {
             return res.status(404).json({ error: 'Worker not found' });
         }
         const companyName = company.companyName || `${company.firstName} ${company.lastName}` || "Un'azienda";
-        const interviewRequest = await prisma.interviewRequest.create({
+        const interviewRequest = await prisma_1.default.interviewRequest.create({
             data: {
                 companyId: company.id,
                 workerId,
@@ -411,7 +415,7 @@ const requestInterview = async (req, res) => {
             }
         });
         // Notify the worker
-        await prisma.notification.create({
+        await prisma_1.default.notification.create({
             data: {
                 userId: worker.userId,
                 title: 'Proposta Iniziale',
@@ -429,8 +433,8 @@ const requestInterview = async (req, res) => {
 exports.requestInterview = requestInterview;
 const updateCompanyProfile = async (req, res) => {
     try {
-        const { companyType, companyName, address, vatNumber, firstName, lastName, residenzaCapCitta, fiscalCode, industry, city, contactPerson, contactPhone } = req.body;
-        const company = await prisma.companyProfile.update({
+        const { companyType, companyName, address, vatNumber, firstName, lastName, residenzaCapCitta, fiscalCode, industry, city, province, sigla, contactPerson, contactPhone, idDocumentUrl } = req.body;
+        const company = await prisma_1.default.companyProfile.update({
             where: { userId: req.user.id },
             data: {
                 companyType,
@@ -443,8 +447,11 @@ const updateCompanyProfile = async (req, res) => {
                 fiscalCode,
                 industry,
                 city,
+                province,
+                sigla,
                 contactPerson,
-                contactPhone
+                contactPhone,
+                idDocumentUrl
             }
         });
         res.json(company);
@@ -457,28 +464,49 @@ const updateCompanyProfile = async (req, res) => {
 exports.updateCompanyProfile = updateCompanyProfile;
 const createProposal = async (req, res) => {
     try {
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!company) {
             return res.status(404).json({ error: 'Company profile not found' });
         }
-        const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status } = req.body;
+        const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status, contractType } = req.body;
+        let pContracts = [];
+        try {
+            pContracts = JSON.parse(contractType || '[]');
+        }
+        catch (e) {
+            if (contractType && contractType !== 'Nessuna preferenza') {
+                pContracts = [contractType];
+            }
+        }
+        if (status !== 'DRAFT') {
+            if (company.companyType === 'PERSONA_FISICA' && !company.idDocumentUrl) {
+                return res.status(403).json({ error: 'Il caricamento del documento d\'identità è obbligatorio prima di poter pubblicare una proposta di lavoro.' });
+            }
+            if (pContracts.length === 0) {
+                return res.status(400).json({ error: 'Seleziona almeno una tipologia di contratto offerto (massimo 2).' });
+            }
+            if (pContracts.length > 2) {
+                return res.status(400).json({ error: 'Puoi selezionare al massimo 2 tipologie di contratto offerto.' });
+            }
+        }
         const profsArr = typeof professions === 'object' ? professions : JSON.parse(professions || '[]');
         const locsArr = typeof locations === 'object' ? locations : JSON.parse(locations || '[]');
         const proposalStatus = status === 'DRAFT' ? 'DRAFT' : 'ACTIVE';
-        const proposal = await prisma.jobProposal.create({
+        const proposal = await prisma_1.default.jobProposal.create({
             data: {
                 companyId: company.id,
                 professions: JSON.stringify(profsArr),
                 locations: JSON.stringify(locsArr),
                 educationTitle: educationTitle || 'Nessuna preferenza',
-                hasLicense: Boolean(hasLicense),
-                hasCar: Boolean(hasCar),
+                hasLicense: false,
+                hasCar: false,
                 minSalary: minSalary || '',
                 maxSalary: maxSalary || '',
                 notes: notes || '',
-                status: proposalStatus
+                status: proposalStatus,
+                contractType: contractType || 'Nessuna preferenza'
             }
         });
         if (proposal.status === 'ACTIVE') {
@@ -494,13 +522,13 @@ const createProposal = async (req, res) => {
 exports.createProposal = createProposal;
 const getProposals = async (req, res) => {
     try {
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!company) {
             return res.status(404).json({ error: 'Company profile not found' });
         }
-        const proposals = await prisma.jobProposal.findMany({
+        const proposals = await prisma_1.default.jobProposal.findMany({
             where: { companyId: company.id },
             include: {
                 company: true,
@@ -530,23 +558,52 @@ exports.getProposals = getProposals;
 const updateProposal = async (req, res) => {
     try {
         const { id } = req.params;
-        const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status } = req.body;
+        const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status, contractType } = req.body;
+        const company = await prisma_1.default.companyProfile.findUnique({
+            where: { userId: req.user.id }
+        });
+        if (!company) {
+            return res.status(404).json({ error: 'Company profile not found' });
+        }
+        if (status === 'ACTIVE') {
+            if (company.companyType === 'PERSONA_FISICA' && !company.idDocumentUrl) {
+                return res.status(403).json({ error: 'Il caricamento del documento d\'identità è obbligatorio prima di poter pubblicare una proposta di lavoro.' });
+            }
+        }
+        let pContracts = [];
+        try {
+            pContracts = JSON.parse(contractType || '[]');
+        }
+        catch (e) {
+            if (contractType && contractType !== 'Nessuna preferenza') {
+                pContracts = [contractType];
+            }
+        }
+        if (status !== 'DRAFT' && contractType !== undefined) {
+            if (pContracts.length === 0) {
+                return res.status(400).json({ error: 'Seleziona almeno una tipologia di contratto offerto (massimo 2).' });
+            }
+            if (pContracts.length > 2) {
+                return res.status(400).json({ error: 'Puoi selezionare al massimo 2 tipologie di contratto offerto.' });
+            }
+        }
         const profsArr = typeof professions === 'object' ? professions : JSON.parse(professions || '[]');
         const locsArr = typeof locations === 'object' ? locations : JSON.parse(locations || '[]');
         const updateData = {
             professions: JSON.stringify(profsArr),
             locations: JSON.stringify(locsArr),
             educationTitle: educationTitle || 'Nessuna preferenza',
-            hasLicense: Boolean(hasLicense),
-            hasCar: Boolean(hasCar),
+            hasLicense: false,
+            hasCar: false,
             minSalary: minSalary || '',
             maxSalary: maxSalary || '',
-            notes: notes || ''
+            notes: notes || '',
+            contractType: contractType || 'Nessuna preferenza'
         };
         if (status) {
             updateData.status = status;
         }
-        const proposal = await prisma.jobProposal.update({
+        const proposal = await prisma_1.default.jobProposal.update({
             where: { id },
             data: updateData,
             include: {
@@ -576,9 +633,20 @@ exports.updateProposal = updateProposal;
 const deleteProposal = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.jobProposal.delete({
+        const proposal = await prisma_1.default.jobProposal.findUnique({
             where: { id }
         });
+        if (proposal && proposal.status === 'ACTIVE') {
+            await prisma_1.default.jobProposal.update({
+                where: { id },
+                data: { status: 'CANCELLED' }
+            });
+        }
+        else {
+            await prisma_1.default.jobProposal.delete({
+                where: { id }
+            });
+        }
         res.json({ success: true });
     }
     catch (error) {
@@ -590,7 +658,7 @@ exports.deleteProposal = deleteProposal;
 // Helper function to find matching workers and send notifications & simulated emails
 const notifyMatchingWorkersOfProposal = async (proposal) => {
     try {
-        const workers = await prisma.workerProfile.findMany({
+        const workers = await prisma_1.default.workerProfile.findMany({
             include: {
                 user: true
             }
@@ -606,7 +674,7 @@ const notifyMatchingWorkersOfProposal = async (proposal) => {
         }
         catch (e) { }
         // Get company details
-        const company = await prisma.companyProfile.findUnique({
+        const company = await prisma_1.default.companyProfile.findUnique({
             where: { id: proposal.companyId }
         });
         const companyName = company?.companyName || 'Un\'azienda';
@@ -681,10 +749,104 @@ const notifyMatchingWorkersOfProposal = async (proposal) => {
             }
             if (!matchLoc)
                 continue;
+            // Contract Match
+            let matchesContract = false;
+            let wContracts = [];
+            try {
+                wContracts = JSON.parse(worker.availabilityContracts || '[]');
+            }
+            catch (e) { }
+            if (wContracts.length === 0 || wContracts.includes('Nessuna preferenza')) {
+                matchesContract = true;
+            }
+            else {
+                let pContracts = [];
+                try {
+                    pContracts = JSON.parse(proposal.contractType || '[]');
+                }
+                catch (e) {
+                    pContracts = [proposal.contractType || ''];
+                }
+                matchesContract = pContracts.some(pc => wContracts.some(wc => wc.toLowerCase().trim() === pc.toLowerCase().trim()));
+            }
+            if (!matchesContract)
+                continue;
+            // Education Match
+            let reqEdus = [];
+            try {
+                reqEdus = JSON.parse(proposal.educationTitle || '[]');
+            }
+            catch (e) {
+                reqEdus = [proposal.educationTitle || 'Nessuna preferenza'];
+            }
+            const checkEducationMatch = (workerLevel, edusList) => {
+                if (edusList.length === 0 || edusList.includes('Nessuna preferenza')) {
+                    return true;
+                }
+                return edusList.some(edu => {
+                    const cleanEdu = edu.toLowerCase().trim();
+                    if (cleanEdu === 'licenza media') {
+                        return ['LICENZA_MEDIA', 'DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'diploma') {
+                        return ['DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'laurea triennale') {
+                        return ['LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'laurea specialistica' || cleanEdu === 'laurea magistrale' || cleanEdu === 'laurea specialistica / magistrale') {
+                        return ['LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'master') {
+                        return ['MASTER'].includes(workerLevel);
+                    }
+                    return false;
+                });
+            };
+            let hasEduMatch = checkEducationMatch(worker.educationLevel, reqEdus);
+            if (!hasEduMatch) {
+                let otherTitles = [];
+                try {
+                    otherTitles = JSON.parse(worker.educationTitles || '[]');
+                }
+                catch (e) { }
+                hasEduMatch = otherTitles.some((e) => checkEducationMatch(e.level, reqEdus));
+            }
+            if (!hasEduMatch)
+                continue;
+            // Salary Match Check
+            const parseSalaryRange = (salaryStr) => {
+                if (!salaryStr || salaryStr.toLowerCase().includes('nessuna preferenza')) {
+                    return { min: null, max: null };
+                }
+                if (salaryStr.includes('-')) {
+                    const parts = salaryStr.split('-');
+                    const min = parseInt(parts[0].replace(/\D/g, ''), 10) || null;
+                    const max = parseInt(parts[1].replace(/\D/g, ''), 10) || null;
+                    return { min, max };
+                }
+                else {
+                    const val = parseInt(salaryStr.replace(/\D/g, ''), 10) || null;
+                    return { min: val, max: null };
+                }
+            };
+            const wSalary = parseSalaryRange(worker.desiredSalary);
+            const pMin = proposal.minSalary ? parseInt(proposal.minSalary.replace(/\D/g, ''), 10) || null : null;
+            const pMax = proposal.maxSalary ? parseInt(proposal.maxSalary.replace(/\D/g, ''), 10) || null : null;
+            if (wSalary.min !== null || wSalary.max !== null) {
+                if (pMin !== null || pMax !== null) {
+                    if (wSalary.min !== null && pMax !== null && pMax < wSalary.min) {
+                        continue;
+                    }
+                    if (wSalary.max !== null && pMin !== null && pMin > wSalary.max) {
+                        continue;
+                    }
+                }
+            }
             // We found a match! Create a standard notification and a simulated email notification!
             const professionsStr = profsArr.join(', ');
             // A. Portal notification (check if already exists to avoid duplicates)
-            const existingNotif = await prisma.notification.findFirst({
+            const existingNotif = await prisma_1.default.notification.findFirst({
                 where: {
                     userId: worker.userId,
                     title: `Nuova Proposta da ${companyName} 💼`,
@@ -692,7 +854,7 @@ const notifyMatchingWorkersOfProposal = async (proposal) => {
                 }
             });
             if (!existingNotif) {
-                await prisma.notification.create({
+                await prisma_1.default.notification.create({
                     data: {
                         userId: worker.userId,
                         title: `Nuova Proposta da ${companyName} 💼`,
@@ -702,7 +864,7 @@ const notifyMatchingWorkersOfProposal = async (proposal) => {
                 });
                 // B. Simulated email notification
                 const emailSubject = `Nuova proposta di lavoro per te da ${companyName}!`;
-                const emailBody = `Da: "Sono Qui Staff" <info@sonoqui.it>
+                const emailBody = `Da: "Ramid Staff" <info@ramid.it>
 A: "${worker.firstName} ${worker.lastName}" <${worker.user.email}>
 Oggetto: ${emailSubject}
 
@@ -715,11 +877,11 @@ Dettagli della proposta:
 - Sede: ${locsArr.map(l => `${l.city || ''} (${l.sigla || l.province || ''})`).join(' / ')}
 - Retribuzione offerta: € ${proposal.minSalary || '0'} - € ${proposal.maxSalary || 'Max'} mensili netti
 
-Accedi subito al tuo pannello su Sono Qui per consultare la proposta completa e rispondere all'azienda!
+Accedi subito al tuo pannello su Ramid per consultare la proposta completa e rispondere all'azienda!
 
 Cordiali saluti,
-Il Team di Sono Qui`;
-                await prisma.notification.create({
+Il Team di Ramid`;
+                await prisma_1.default.notification.create({
                     data: {
                         userId: worker.userId,
                         title: emailSubject,
@@ -734,3 +896,41 @@ Il Team di Sono Qui`;
         console.error('Error sending matching notifications:', err);
     }
 };
+const uploadIdDocument = async (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const { base64Data } = req.body;
+        if (!base64Data) {
+            return res.status(400).json({ error: 'Nessun file fornito.' });
+        }
+        // Extract the actual base64 content
+        const base64Content = base64Data.split(';base64,').pop();
+        const buffer = Buffer.from(base64Content, 'base64');
+        // Create a unique file name
+        const sanitizedFileName = `id-${req.user.id}-${Date.now()}.png`;
+        const uploadsPath = path.join(__dirname, '../../uploads');
+        // Ensure dir exists
+        if (!fs.existsSync(uploadsPath)) {
+            fs.mkdirSync(uploadsPath, { recursive: true });
+        }
+        const filePath = path.join(uploadsPath, sanitizedFileName);
+        fs.writeFileSync(filePath, buffer);
+        const fileUrl = `/uploads/${sanitizedFileName}`;
+        // Update database
+        const updatedCompany = await prisma_1.default.companyProfile.update({
+            where: { userId: req.user.id },
+            data: { idDocumentUrl: fileUrl }
+        });
+        res.json({
+            success: true,
+            idDocumentUrl: fileUrl,
+            company: updatedCompany
+        });
+    }
+    catch (error) {
+        console.error('Error uploading ID document:', error);
+        res.status(500).json({ error: 'Errore durante il caricamento del documento d\'identità.' });
+    }
+};
+exports.uploadIdDocument = uploadIdDocument;

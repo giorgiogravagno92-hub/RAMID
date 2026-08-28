@@ -4,19 +4,23 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.prisma = void 0;
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const dotenv_1 = __importDefault(require("dotenv"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const workerRoutes_1 = __importDefault(require("./routes/workerRoutes"));
 const companyRoutes_1 = __importDefault(require("./routes/companyRoutes"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
 const wpRoutes_1 = __importDefault(require("./routes/wpRoutes"));
-const client_1 = require("@prisma/client");
-dotenv_1.default.config();
+const prisma_1 = __importDefault(require("./prisma"));
+exports.prisma = prisma_1.default;
+if (!process.env.JWT_SECRET) {
+    console.error('❌ Errore fatale: La variabile d\'ambiente JWT_SECRET non è definita!');
+    process.exit(1);
+}
 const app = (0, express_1.default)();
-const prisma = new client_1.PrismaClient();
-exports.prisma = prisma;
+app.set('trust proxy', 1);
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: '10mb' })); // Support larger base64 file payloads
 const fs_1 = __importDefault(require("fs"));

@@ -1,7 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../prisma';
 
 const SIGLA_TO_PROVINCE: Record<string, string> = {
   "AG": "Agrigento", "AL": "Alessandria", "AN": "Ancona", "AO": "Aosta", "AR": "Arezzo",
@@ -76,6 +74,7 @@ export const updateProfile = async (req: any, res: Response) => {
       firstName,
       lastName,
       photoUrl,
+      phone,
       city,
       province,
       region,
@@ -113,6 +112,7 @@ export const updateProfile = async (req: any, res: Response) => {
         firstName,
         lastName,
         photoUrl,
+        phone,
         city,
         province,
         sigla,
@@ -184,6 +184,65 @@ export const toggleAvailability = async (req: any, res: Response) => {
     const contractsStr = typeof availabilityContracts === 'object' ? JSON.stringify(availabilityContracts) : availabilityContracts;
     const rolesStr = typeof availabilityRoles === 'object' ? JSON.stringify(availabilityRoles) : availabilityRoles;
 
+    let parsedRoles: string[] = [];
+    try { parsedRoles = JSON.parse(rolesStr || '[]'); } catch (e) {}
+    
+    if (status !== 'NON_DISPONIBILE' && parsedRoles.length > 2) {
+      return res.status(400).json({ error: 'Puoi selezionare al massimo 2 ruoli.' });
+    }
+
+    const existingProfile = await prisma.workerProfile.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!existingProfile) {
+      return res.status(404).json({ error: 'Worker profile not found' });
+    }
+
+    const cleanJson = (str: string | null) => {
+      try {
+        return JSON.stringify(JSON.parse(str || '[]'));
+      } catch(e) {
+        return '[]';
+      }
+    };
+
+    const incomingRegions = cleanJson(regionsStr);
+    const existingRegions = cleanJson(existingProfile.availabilityRegionsProvinces);
+    const incomingContracts = cleanJson(contractsStr);
+    const existingContracts = cleanJson(existingProfile.availabilityContracts);
+    const incomingRoles = cleanJson(rolesStr);
+    const existingRoles = cleanJson(existingProfile.availabilityRoles);
+    const incomingSalary = desiredSalary || '';
+    const existingSalary = existingProfile.desiredSalary || '';
+    const incomingNotes = notes || '';
+    const existingNotes = existingProfile.availabilityNotes || '';
+
+    const isChangingDetails = 
+      (regionsStr !== undefined && incomingRegions !== existingRegions) ||
+      (availabilityContracts !== undefined && incomingContracts !== existingContracts) ||
+      (availabilityRoles !== undefined && incomingRoles !== existingRoles) ||
+      (desiredSalary !== undefined && incomingSalary !== existingSalary) ||
+      (notes !== undefined && incomingNotes !== existingNotes);
+
+    let updateUpdatedAt = false;
+
+    if (status !== 'NON_DISPONIBILE' && isChangingDetails) {
+      if (existingProfile.availabilityUpdatedAt) {
+        const lastUpdate = new Date(existingProfile.availabilityUpdatedAt);
+        const unlockDate = new Date(lastUpdate);
+        unlockDate.setMonth(unlockDate.getMonth() + 3);
+        
+        if (new Date() < unlockDate) {
+          const formattedUnlockDate = unlockDate.toLocaleDateString('it-IT');
+          return res.status(400).json({ 
+            error: `Non puoi modificare le tue preferenze di disponibilità prima del ${formattedUnlockDate}` 
+          });
+        }
+      }
+      updateUpdatedAt = true;
+    }
+
     const profile = await prisma.workerProfile.update({
       where: { userId: req.user.id },
       data: {
@@ -196,8 +255,9 @@ export const toggleAvailability = async (req: any, res: Response) => {
           availabilityRegionsProvinces: regionsStr || '[]',
           availabilityContracts: contractsStr || '[]',
           availabilityRoles: rolesStr || '[]',
-          desiredSalary,
-          availabilityNotes: notes
+          desiredSalary: desiredSalary || '',
+          availabilityNotes: notes || '',
+          ...(updateUpdatedAt ? { availabilityUpdatedAt: new Date() } : {})
         } : {})
       },
       include: {
@@ -414,9 +474,11 @@ export const getProposalsForWorker = async (req: any, res: Response) => {
       return res.status(404).json({ error: 'Worker profile not found' });
     }
 
-    // Active proposals sent by companies
+    // Active or Cancelled proposals sent by companies
     const activeProposals = await prisma.jobProposal.findMany({
-      where: { status: 'ACTIVE' },
+      where: {
+        status: { in: ['ACTIVE', 'CANCELLED'] }
+      },
       include: {
         company: true,
         responses: {
@@ -425,6 +487,21 @@ export const getProposalsForWorker = async (req: any, res: Response) => {
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    const parseSalaryRange = (salaryStr: string | null | undefined) => {
+      if (!salaryStr || salaryStr.toLowerCase().includes('nessuna preferenza')) {
+        return { min: null, max: null };
+      }
+      if (salaryStr.includes('-')) {
+        const parts = salaryStr.split('-');
+        const min = parseInt(parts[0].replace(/\D/g, ''), 10) || null;
+        const max = parseInt(parts[1].replace(/\D/g, ''), 10) || null;
+        return { min, max };
+      } else {
+        const val = parseInt(salaryStr.replace(/\D/g, ''), 10) || null;
+        return { min: val, max: null };
+      }
+    };
 
     // Filter proposals matching candidate's profession / roles and location
     const matchedProposals = activeProposals.filter(prop => {
@@ -520,6 +597,87 @@ export const getProposalsForWorker = async (req: any, res: Response) => {
       }
       if (!matchLoc) return false;
 
+      // Contract Match
+      let matchesContract = false;
+      let wContracts: string[] = [];
+      try {
+        wContracts = JSON.parse(worker.availabilityContracts || '[]');
+      } catch (e) {}
+
+      if (wContracts.length === 0 || wContracts.includes('Nessuna preferenza')) {
+        matchesContract = true;
+      } else {
+        let pContracts: string[] = [];
+        try {
+          pContracts = JSON.parse(prop.contractType || '[]');
+        } catch (e) {
+          pContracts = [prop.contractType || ''];
+        }
+        matchesContract = pContracts.some(pc => 
+          wContracts.some(wc => wc.toLowerCase().trim() === pc.toLowerCase().trim())
+        );
+      }
+      if (!matchesContract) return false;
+
+      // Education Match
+      let reqEdus: string[] = [];
+      try {
+        reqEdus = JSON.parse(prop.educationTitle || '[]');
+      } catch (e) {
+        reqEdus = [prop.educationTitle || 'Nessuna preferenza'];
+      }
+
+      const checkEducationMatch = (workerLevel: string, edusList: string[]) => {
+        if (edusList.length === 0 || edusList.includes('Nessuna preferenza')) {
+          return true;
+        }
+        return edusList.some(edu => {
+          const cleanEdu = edu.toLowerCase().trim();
+          if (cleanEdu === 'licenza media') {
+            return ['LICENZA_MEDIA', 'DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'diploma') {
+            return ['DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'laurea triennale') {
+            return ['LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'laurea specialistica' || cleanEdu === 'laurea magistrale' || cleanEdu === 'laurea specialistica / magistrale') {
+            return ['LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'master') {
+            return ['MASTER'].includes(workerLevel);
+          }
+          return false;
+        });
+      };
+
+      let hasEduMatch = checkEducationMatch(worker.educationLevel, reqEdus);
+      if (!hasEduMatch) {
+        let otherTitles: any[] = [];
+        try {
+          otherTitles = JSON.parse(worker.educationTitles || '[]');
+        } catch(e) {}
+        hasEduMatch = otherTitles.some((e: any) => checkEducationMatch(e.level, reqEdus));
+      }
+      if (!hasEduMatch) return false;
+
+      // Salary Match
+      const wSalary = parseSalaryRange(worker.desiredSalary);
+      const pMin = prop.minSalary ? parseInt(prop.minSalary.replace(/\D/g, ''), 10) || null : null;
+      const pMax = prop.maxSalary ? parseInt(prop.maxSalary.replace(/\D/g, ''), 10) || null : null;
+
+      if (wSalary.min !== null || wSalary.max !== null) {
+        if (pMin !== null || pMax !== null) {
+          if (wSalary.min !== null && pMax !== null && pMax < wSalary.min) {
+            return false;
+          }
+          if (wSalary.max !== null && pMin !== null && pMin > wSalary.max) {
+            return false;
+          }
+        }
+      }
+
       return true;
     });
 
@@ -554,6 +712,18 @@ export const respondToJobProposal = async (req: any, res: Response) => {
 
     if (!proposal) {
       return res.status(404).json({ error: 'Job proposal not found' });
+    }
+
+    // 15-day expiration check
+    const proposalDate = new Date(proposal.createdAt);
+    const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+    if (new Date().getTime() - proposalDate.getTime() > fifteenDaysInMs) {
+      return res.status(400).json({ error: 'La proposta è scaduta e non è più possibile rispondere.' });
+    }
+
+    // Check if proposal is cancelled
+    if (proposal.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'La proposta è stata annullata dal recruiter.' });
     }
 
     // Upsert proposal response

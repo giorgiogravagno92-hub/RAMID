@@ -1,17 +1,22 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import workerRoutes from './routes/workerRoutes';
 import companyRoutes from './routes/companyRoutes';
 import adminRoutes from './routes/adminRoutes';
 import wpRoutes from './routes/wpRoutes';
-import { PrismaClient } from '@prisma/client';
+import prisma from './prisma';
 
-dotenv.config();
+if (!process.env.JWT_SECRET) {
+  console.error('❌ Errore fatale: La variabile d\'ambiente JWT_SECRET non è definita!');
+  process.exit(1);
+}
 
 const app = express();
-const prisma = new PrismaClient();
+app.set('trust proxy', 1);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Support larger base64 file payloads

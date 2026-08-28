@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../utils/api';
+import { api, BACKEND_URL } from '../utils/api';
 import { DIPLOMAS, DEGREES, PROFESSIONS, CITIES, REGIONS_AND_PROVINCES, COMPUTER_SKILLS_LIST, ORGANIZATIONAL_SKILLS_LIST, PROVINCE_SIGLE, UNIVERSITIES, COMMUNICATIVE_SKILLS_LIST, LANGUAGE_SKILLS_LIST } from '../utils/constants';
 
 interface WorkerDashboardProps {
@@ -174,6 +174,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
   const [formData, setFormData] = useState<any>({
     firstName: '',
     lastName: '',
+    phone: '',
     profession: '',
     city: '',
     province: '',
@@ -239,6 +240,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       setSelectedProfessions(initialProfs);
       setFormData({
         ...prof,
+        phone: prof.phone || '',
         workExperiences: prof.workExperiences || [],
         availabilityRegionsProvinces: prof.availabilityRegionsProvinces || '[]',
         availabilityContracts: prof.availabilityContracts || '[]',
@@ -398,22 +400,19 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
     if (region === 'Tutte le regioni') {
       if (selectedRegions.includes('Tutte le regioni')) {
         setSelectedRegions([]);
+        setSelectedProvinces([]);
       } else {
         setSelectedRegions(['Tutte le regioni']);
         setSelectedProvinces([]);
       }
     } else {
-      let updated = [...selectedRegions];
-      if (updated.includes('Tutte le regioni')) {
-        updated = [];
-      }
-      if (updated.includes(region)) {
-        updated = updated.filter(r => r !== region);
-        setSelectedProvinces(selectedProvinces.filter(p => p.region !== region));
+      if (selectedRegions.includes(region)) {
+        setSelectedRegions([]);
+        setSelectedProvinces([]);
       } else {
-        updated.push(region);
+        setSelectedRegions([region]);
+        setSelectedProvinces([]);
       }
-      setSelectedRegions(updated);
     }
   };
 
@@ -457,7 +456,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
     e.preventDefault();
 
     if (selectedRegions.length === 0) {
-      alert('Seleziona almeno una regione di interesse per attivare la disponibilità.');
+      alert('Seleziona una regione di interesse per attivare la disponibilità.');
+      return;
+    }
+
+    if (selectedRegions.length > 1) {
+      alert('Puoi selezionare solo una regione di interesse.');
       return;
     }
 
@@ -470,7 +474,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
     const regionsProvincesStructure = selectedRegions.map(r => {
       const regionProvinces = selectedProvinces.filter(p => p.region === r).map(p => ({
         name: p.name,
-        maxDistance: p.maxDistance
+        maxDistance: p.maxDistance || 50
       }));
       return {
         region: r,
@@ -483,7 +487,18 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       return;
     }
 
+    if (availRoles.length > 2) {
+      alert('Puoi selezionare al massimo 2 ruoli.');
+      return;
+    }
+
     const salaryStr = noSalaryPref ? 'Nessuna preferenza' : (minSalary && maxSalary ? `${minSalary} - ${maxSalary}` : minSalary || '');
+
+    if (!isLockoutActive()) {
+      if (!window.confirm('Attenzione: Una volta confermate ed attivate, queste preferenze rimarranno bloccate per 3 mesi e non potrai modificarle. Vuoi procedere?')) {
+        return;
+      }
+    }
 
     try {
       const res = await api.worker.toggleAvailability({
@@ -498,6 +513,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
         setProfile(res.profile);
         setFormData({
           ...res.profile,
+          phone: res.profile.phone || '',
           workExperiences: res.profile.workExperiences || [],
           availabilityRegionsProvinces: res.profile.availabilityRegionsProvinces || '[]',
           availabilityContracts: res.profile.availabilityContracts || '[]',
@@ -509,8 +525,9 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       if (onNotifyMobile) {
         onNotifyMobile('Stato Attivo 🟢', 'Disponibilità a ricevere proposte attivata.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(err.response?.data?.error || 'Errore durante l\'attivazione della disponibilità.');
     }
   };
 
@@ -528,11 +545,62 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
     }
   };
 
+  const isLockoutActive = () => {
+    if (!profile?.availabilityUpdatedAt) return false;
+    const lastUpdate = new Date(profile.availabilityUpdatedAt);
+    const unlockDate = new Date(lastUpdate);
+    unlockDate.setMonth(unlockDate.getMonth() + 3);
+    return new Date() < unlockDate;
+  };
+
+  const getUnlockDateString = () => {
+    if (!profile?.availabilityUpdatedAt) return '';
+    const lastUpdate = new Date(profile.availabilityUpdatedAt);
+    const unlockDate = new Date(lastUpdate);
+    unlockDate.setMonth(unlockDate.getMonth() + 3);
+    return unlockDate.toLocaleDateString('it-IT');
+  };
+
+  const handleDirectActivation = async () => {
+    try {
+      const res = await api.worker.toggleAvailability({
+        status: 'DISPONIBILE_PROPOSTE',
+        availabilityRegionsProvinces: profile.availabilityRegionsProvinces,
+        availabilityContracts: profile.availabilityContracts,
+        availabilityRoles: profile.availabilityRoles,
+        desiredSalary: profile.desiredSalary,
+        notes: profile.availabilityNotes
+      });
+      if (res.profile) {
+        setProfile(res.profile);
+        setFormData({
+          ...res.profile,
+          phone: res.profile.phone || '',
+          workExperiences: res.profile.workExperiences || [],
+          availabilityRegionsProvinces: res.profile.availabilityRegionsProvinces || '[]',
+          availabilityContracts: res.profile.availabilityContracts || '[]',
+          availabilityRoles: res.profile.availabilityRoles || '[]',
+          notes: res.profile.notes || ''
+        });
+      }
+      if (onNotifyMobile) {
+        onNotifyMobile('Stato Attivo 🟢', 'Disponibilità a ricevere proposte attivata.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || err.message || 'Errore durante l\'attivazione');
+    }
+  };
+
   const handleStatusChange = (status: string) => {
     if (status === 'NON_DISPONIBILE') {
       handleDeactivateAvailability();
     } else {
-      openAvailabilityModal(status);
+      if (isLockoutActive()) {
+        handleDirectActivation();
+      } else {
+        openAvailabilityModal(status);
+      }
     }
   };
 
@@ -550,6 +618,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
     }
     if (!formData.city?.trim() || !formData.province) {
       alert('Città e Provincia sono obbligatorie.');
+      return;
+    }
+
+    if (formData.phone && !/^[0-9+\-()\s]+$/.test(formData.phone)) {
+      alert('Il contatto telefonico deve contenere solo numeri e simboli consentiti (+ - ( ) spazio).');
       return;
     }
 
@@ -583,6 +656,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       const savedStateObj = {
         formData: {
           ...updated,
+          phone: updated.phone || '',
           workExperiences: updated.workExperiences || [],
           availabilityRegionsProvinces: updated.availabilityRegionsProvinces || '[]',
           availabilityContracts: updated.availabilityContracts || '[]',
@@ -957,7 +1031,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
       {isProfileIncomplete && (
         <div style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid var(--accent-blue)', color: 'var(--text-primary)', padding: '16px', borderRadius: '12px', marginBottom: '20px', fontSize: '0.95rem', lineHeight: '1.4' }}>
-          👋 <strong>Benvenuto su Sono Qui!</strong><br />
+          👋 <strong>Benvenuto su Ramid!</strong><br />
           Per favore, completa la compilazione del tuo curriculum inserendo i dati minimi obbligatori (Professione, Città, Provincia, Titoli di studio ed Esperienze pregresse) per rendere attivo il tuo profilo e poter utilizzare tutte le funzionalità.
         </div>
       )}
@@ -969,11 +1043,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
           </h4>
           
           {/* Toggle buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+          <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
             <button 
               type="button"
               className="btn"
-              onClick={() => openAvailabilityModal('DISPONIBILE_PROPOSTE')}
+              onClick={() => handleStatusChange('DISPONIBILE_PROPOSTE')}
               style={{ 
                 padding: '12px', 
                 fontSize: '0.85rem',
@@ -988,11 +1062,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
             >
               🟢 Attiva Ricezione Proposte
             </button>
-
+ 
             <button 
               type="button"
               className="btn"
-              onClick={handleDeactivateAvailability}
+              onClick={() => handleStatusChange('NON_DISPONIBILE')}
               style={{ 
                 padding: '12px', 
                 fontSize: '0.85rem',
@@ -1133,6 +1207,17 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
               </div>
 
               <div className="form-group">
+                <label className="form-label">Contatto Telefonico</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={formData.phone || ''} 
+                  onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/[^0-9+\-()\s]/g, '')})} 
+                  placeholder="Inserisci il tuo numero di telefono..." 
+                />
+              </div>
+
+              <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 'bold' }}>Professioni / Ruoli Cercati (Seleziona uno o più)</label>
                 
                 {/* Visualizzazione Professioni Aggiunte */}
@@ -1147,10 +1232,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         key={p} 
                         className="tag" 
                         style={{ 
-                          background: 'rgba(59, 130, 246, 0.1)', 
-                          borderColor: 'var(--accent-blue)', 
-                          color: '#fff', 
-                          fontSize: '0.8rem', 
+                          background: '#f1f5f9', 
+                          borderColor: '#cbd5e1', 
+                          color: '#0f172a', 
+                          fontSize: '0.9rem', 
+                          fontWeight: 700,
                           padding: '6px 12px', 
                           borderRadius: '20px', 
                           display: 'flex', 
@@ -1234,7 +1320,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '8px', marginBottom: '16px' }}>
+              <div className="grid-location-fields" style={{ marginBottom: '16px' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Città</label>
                   <input 
@@ -1296,7 +1382,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     <span>{compSkillsOpen ? '▲' : '▼'}</span>
                   </div>
                   {compSkillsOpen && (
-                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto' }}>
+                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto', overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
@@ -1362,7 +1448,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     <span>{langSkillsOpen ? '▲' : '▼'}</span>
                   </div>
                   {langSkillsOpen && (
-                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto' }}>
+                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto', overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
@@ -1457,7 +1543,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     <span>{orgSkillsOpen ? '▲' : '▼'}</span>
                   </div>
                   {orgSkillsOpen && (
-                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto' }}>
+                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto', overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
@@ -1525,7 +1611,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     <span>{commSkillsOpen ? '▲' : '▼'}</span>
                   </div>
                   {commSkillsOpen && (
-                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto' }}>
+                    <div style={{ padding: '12px', background: '#ffffff', maxHeight: '300px', overflowY: 'auto', overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
@@ -1691,7 +1777,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
                 {/* Form inserimento nuovo titolo */}
                 <div style={{ background: 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: '8px', border: '1px dashed var(--border-glass)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  <div className="responsive-grid-2" style={{ marginBottom: '10px' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.75rem' }}>Livello</label>
                       <select 
@@ -1708,8 +1794,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         <option value="LICENZA_MEDIA">Licenza Media</option>
                         <option value="DIPLOMA">Diploma</option>
                         <option value="LAUREA_TRIENNALE">Laurea triennale</option>
-                        <option value="LAUREA_SPECIALISTICA">Laurea specialistica</option>
-                        <option value="LAUREA_MAGISTRALE">Laurea Magistrale</option>
+                        <option value="LAUREA_SPECIALISTICA">Laurea specialistica / magistrale</option>
                         <option value="MASTER">Master</option>
                       </select>
                     </div>
@@ -1788,7 +1873,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
                   {/* Campi condizionali per Diploma */}
                   {newEduLevel === 'DIPLOMA' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: '10px' }}>
+                    <div className="responsive-grid-3" style={{ marginTop: '10px', marginBottom: '10px' }}>
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label" style={{ fontSize: '0.75rem' }}>Conseguito in data</label>
                         <input 
@@ -1805,7 +1890,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                           className="form-control" 
                           placeholder="Inserisci votazione" 
                           value={newEduVotazione} 
-                          onChange={(e) => setNewEduVotazione(e.target.value)} 
+                          onChange={(e) => setNewEduVotazione(e.target.value.replace(/\D/g, ''))} 
                         />
                       </div>
                       <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1838,7 +1923,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                           ))}
                         </select>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                      <div className="responsive-grid-3">
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <label className="form-label" style={{ fontSize: '0.75rem' }}>In data</label>
                           <input 
@@ -1855,7 +1940,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                             className="form-control" 
                             placeholder="Inserisci votazione" 
                             value={newEduVotazione} 
-                            onChange={(e) => setNewEduVotazione(e.target.value)} 
+                            onChange={(e) => setNewEduVotazione(e.target.value.replace(/\D/g, ''))} 
                           />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1875,7 +1960,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
                   {/* Campi condizionali per Master */}
                   {newEduLevel === 'MASTER' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: '10px' }}>
+                    <div className="responsive-grid-2" style={{ marginTop: '10px', marginBottom: '10px' }}>
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label" style={{ fontSize: '0.75rem' }}>Conseguito presso</label>
                         <input 
@@ -2167,7 +2252,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     <input type="text" className="form-control" style={{ padding: '8px' }} value={newExpCompany} onChange={(e) => setNewExpCompany(e.target.value)} autoComplete="off" />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  <div className="grid-location-fields" style={{ marginBottom: '8px' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '4px' }}>Città</label>
                       <input type="text" className="form-control" style={{ padding: '8px' }} value={newExpCity} onChange={(e) => setNewExpCity(capitalizeCity(e.target.value))} autoComplete="off" />
@@ -2210,7 +2295,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                      {newExpRoles.length > 0 && (
                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                          {newExpRoles.map(r => (
-                           <span key={r} className="tag" style={{ background: 'var(--accent-purple)', color: '#fff', padding: '3px 8px', borderRadius: '12px', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(139,92,246,0.3)' }}>
+                           <span key={r} className="tag" style={{ background: '#4c1d95', color: '#fff', padding: '3px 8px', borderRadius: '12px', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(139,92,246,0.3)' }}>
                              {r}
                              <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px' }} onClick={() => setNewExpRoles(newExpRoles.filter(item => item !== r))}>&times;</span>
                            </span>
@@ -2245,7 +2330,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                      </select>
                    </div>
 
-                  <div className="form-control-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  <div className="form-control-row" style={{ marginBottom: '8px' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '4px' }}>Data Inizio</label>
                       <input type="date" className="form-control" style={{ padding: '6px' }} value={newExpStart} onChange={(e) => setNewExpStart(e.target.value)} />
@@ -2467,9 +2552,9 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                 )}
               </div>
 
-              {/* PDF & Video Upload Simulator */}
+              {/* PDF Upload Simulator */}
               <div style={{ border: '1px dashed var(--border-glass)', padding: '12px', borderRadius: '10px', marginBottom: '20px' }}>
-                <h5 style={{ marginBottom: '8px', fontSize: '0.85rem' }}>📄 CV PDF & 🎥 Video Presentazione</h5>
+                <h5 style={{ marginBottom: '8px', fontSize: '0.85rem' }}>📄 CV PDF</h5>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
                   {/* PDF Section */}
@@ -2510,51 +2595,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       </button>
                     )}
                   </div>
-
-                  {/* Video Section */}
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
-                      style={{ padding: '8px 12px', fontSize: '0.75rem', flex: 1 }} 
-                      onClick={() => setShowVideoModal(true)}
-                    >
-                      {formData.videoPresentationUrl ? '✓ Video Caricato' : '🎥 Registra Video'}
-                    </button>
-                    {formData.videoPresentationUrl && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Sicuro di voler eliminare il video di presentazione?")) {
-                            setFormData({ ...formData, videoPresentationUrl: '' });
-                          }
-                        }}
-                        className="btn"
-                        style={{
-                          background: 'rgba(239, 68, 68, 0.1)',
-                          color: 'var(--accent-red)',
-                          border: '1px solid rgba(239, 68, 68, 0.2)',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer'
-                        }}
-                        title="Elimina Video"
-                      >
-                        🗑️ Elimina Video
-                      </button>
-                    )}
-                  </div>
                 </div>
 
                 {uploadProgress !== null && (
                   <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '4px', height: '6px', overflow: 'hidden', marginBottom: '6px' }}>
                     <div style={{ background: 'var(--accent-blue)', height: '100%', width: `${uploadProgress}%`, transition: 'width 0.2s' }}></div>
-                  </div>
-                )}
-                {videoProgress !== null && (
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                    <div style={{ background: 'var(--accent-purple)', height: '100%', width: `${videoProgress}%`, transition: 'width 0.2s' }}></div>
                   </div>
                 )}
               </div>
@@ -2601,7 +2646,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     width: '96px', 
                     height: '96px', 
                     borderRadius: '50%', 
-                    background: profile.photoUrl ? `url(${api.isOffline() ? '' : 'http://localhost:5000'}${profile.photoUrl}) center/cover no-repeat` : '#ffffff',
+                    background: profile.photoUrl ? `url(${api.isOffline() ? '' : BACKEND_URL}${profile.photoUrl}) center/cover no-repeat` : '#ffffff',
                     border: '2px solid var(--accent-purple)',
                     cursor: 'pointer',
                     display: 'flex',
@@ -2658,8 +2703,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       const label = profile.educationLevel === 'LICENZA_MEDIA' ? 'Licenza Media' : 
                                     profile.educationLevel === 'DIPLOMA' ? 'Diploma' : 
                                     profile.educationLevel === 'LAUREA_TRIENNALE' ? 'Laurea triennale' : 
-                                    profile.educationLevel === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica' : 
-                                    profile.educationLevel === 'LAUREA_MAGISTRALE' ? 'Laurea Magistrale' : 'Laurea';
+                                    profile.educationLevel === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica / magistrale' : 
+                                    profile.educationLevel === 'LAUREA_MAGISTRALE' ? 'Laurea specialistica / magistrale' : 'Laurea';
                       return <span style={{ marginLeft: '6px' }}>{label} {profile.educationField ? `- ${profile.educationField}` : ''}</span>;
                     }
                     return (
@@ -2669,8 +2714,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                                         edu.level === 'DIPLOMA' ? 'Diploma' : 
                                         edu.level === 'LAUREA' ? 'Laurea triennale' : 
                                         edu.level === 'LAUREA_TRIENNALE' ? 'Laurea triennale' : 
-                                        edu.level === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica' : 
-                                        edu.level === 'LAUREA_MAGISTRALE' ? 'Laurea Magistrale' : 
+                                        edu.level === 'LAUREA_SPECIALISTICA' ? 'Laurea specialistica / magistrale' : 
+                                        edu.level === 'LAUREA_MAGISTRALE' ? 'Laurea specialistica / magistrale' : 
                                         edu.level === 'MASTER' ? 'Master' : edu.level;
                           
                           let details = '';
@@ -2701,6 +2746,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     );
                   })()}
                 </div>
+                <div><strong>Contatto Telefonico:</strong> {profile.phone || 'Non specificato'}</div>
                 <div><strong>Patente B:</strong> {profile.hasLicense ? 'Sì' : 'No'} | <strong>Automunito:</strong> {profile.hasCar ? 'Sì' : 'No'}</div>
                 {profile.notes && (
                   <div style={{ marginTop: '4px' }}>
@@ -2916,7 +2962,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
                 {/* Media Simulation */}
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', marginTop: '20px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <h5 style={{ fontSize: '0.8rem', color: '#fff' }}>📁 Allegati e Video</h5>
+                  <h5 style={{ fontSize: '0.8rem', color: '#fff' }}>📁 Allegato CV PDF</h5>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
                       type="button"
@@ -2925,25 +2971,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       disabled={!profile.cvPdfUrl}
                       onClick={() => {
                         if (profile.cvPdfUrl) {
-                          const backendUrl = api.isOffline() ? '' : 'http://localhost:5000';
+                          const backendUrl = api.isOffline() ? '' : BACKEND_URL;
                           window.open(backendUrl + profile.cvPdfUrl, '_blank');
                         }
                       }}
                     >
                       📄 {profile.cvPdfUrl ? 'Apri CV PDF' : 'Nessun PDF allegato'}
-                    </button>
-                    <button 
-                      type="button"
-                      className="btn btn-secondary" 
-                      style={{ padding: '6px 10px', fontSize: '0.75rem', flex: 1 }} 
-                      disabled={!profile.videoPresentationUrl}
-                      onClick={() => {
-                        if (profile.videoPresentationUrl) {
-                          alert('Apertura player video presentatore.');
-                        }
-                      }}
-                    >
-                      🎥 {profile.videoPresentationUrl ? 'Guarda Video' : 'Nessun Video'}
                     </button>
                   </div>
                 </div>
@@ -2959,7 +2992,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
           
           {/* Proposte di Lavoro Ricevute dalle Aziende */}
           <div>
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#000', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
               💼 Proposte di Lavoro dalle Aziende
             </h3>
             {companyJobProposals.length === 0 ? (
@@ -2977,23 +3010,40 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
                   const userResponse = (prop.responses || [])[0]?.status;
 
+                  const proposalDate = new Date(prop.createdAt);
+                  const now = new Date();
+                  const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+                  const msDiff = fifteenDaysInMs - (now.getTime() - proposalDate.getTime());
+                  const isExpired = msDiff <= 0;
+                  const isCancelled = prop.status === 'CANCELLED';
+
                   return (
                     <div
                       key={prop.id}
                       className="glass-card"
                       style={{
                         padding: '16px',
-                        borderLeft: userResponse === 'ACCEPTED' ? '3px solid var(--accent-green)' : '3px solid var(--accent-blue)',
+                        borderLeft: isCancelled ? '3px solid var(--accent-red)' : (userResponse === 'ACCEPTED' ? '3px solid var(--accent-green)' : '3px solid var(--accent-blue)'),
                         background: 'rgba(255,255,255,0.02)'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '0.95rem', color: '#fff' }}>
+                        <strong style={{ fontSize: '0.95rem', color: '#000' }}>
                           🏢 {prop.company?.companyName || 'Azienda Riservata'}
                         </strong>
-                        <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '12px', background: userResponse === 'ACCEPTED' ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)', color: userResponse === 'ACCEPTED' ? 'var(--accent-green)' : 'var(--accent-blue)', fontWeight: 700 }}>
-                          {userResponse === 'ACCEPTED' ? '✅ CONTATTO DIRETTO ACCETTATO' : (userResponse === 'DECLINED' ? '❌ RIFIUTATO' : '📩 PROPOSTA ATTIVA')}
-                        </span>
+                        {isCancelled ? (
+                          <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '12px', background: 'rgba(239,68,68,0.15)', color: 'var(--accent-red)', fontWeight: 700 }}>
+                            ❌ ANNULLATA DAL RECRUITER
+                          </span>
+                        ) : (isExpired && !userResponse) ? (
+                          <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '12px', background: 'rgba(239,68,68,0.15)', color: 'var(--accent-red)', fontWeight: 700 }}>
+                            ⏳ SCADUTA
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '12px', background: userResponse === 'ACCEPTED' ? 'rgba(16,185,129,0.15)' : (userResponse === 'DECLINED' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)'), color: userResponse === 'ACCEPTED' ? 'var(--accent-green)' : (userResponse === 'DECLINED' ? 'var(--accent-red)' : 'var(--accent-blue)'), fontWeight: 700 }}>
+                            {userResponse === 'ACCEPTED' ? '✅ CONTATTO DIRETTO ACCETTATO' : (userResponse === 'DECLINED' ? '❌ RIFIUTATO' : '📩 PROPOSTA ATTIVA')}
+                          </span>
+                        )}
                       </div>
 
                       <div style={{ fontSize: '0.8rem', color: 'var(--accent-blue)', fontWeight: 700, marginBottom: '4px' }}>
@@ -3010,8 +3060,16 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         </p>
                       )}
 
-                      {!userResponse ? (
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      {isCancelled ? (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-red)', marginTop: '8px', fontWeight: 600 }}>
+                          La proposta è stata annullata dal recruiter.
+                        </div>
+                      ) : (isExpired && !userResponse) ? (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-red)', marginTop: '8px', fontWeight: 600 }}>
+                          Questa proposta è scaduta (limite di 15 giorni superato).
+                        </div>
+                      ) : !userResponse ? (
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             className="btn btn-success"
@@ -3045,6 +3103,16 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                           >
                             ❌ Non Interessato
                           </button>
+                          {(() => {
+                            const daysLeft = Math.ceil(msDiff / (24 * 60 * 60 * 1000));
+                            const hoursLeft = Math.ceil(msDiff / (60 * 60 * 1000));
+                            const timerText = daysLeft > 1 ? `Scade tra ${daysLeft} giorni` : `Scade tra ${hoursLeft} ore`;
+                            return (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--accent-yellow)', fontWeight: 600, display: 'inline-block', alignSelf: 'center', marginLeft: '10px' }}>
+                                ⏳ {timerText}
+                              </span>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <div style={{ fontSize: '0.75rem', color: userResponse === 'ACCEPTED' ? 'var(--accent-green)' : 'var(--text-muted)', marginTop: '8px', fontWeight: 600 }}>
@@ -3059,161 +3127,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
               </div>
             )}
           </div>
-
-          {/* Proposte Iniziali Section */}
-          <div>
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              ✉️ Altre Comunicazioni Aziendali
-            </h3>
-            {interviews.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', textAlign: 'center' }}>
-                Nessuna proposta iniziale ricevuta al momento.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {interviews.map((req) => (
-                  <div 
-                    key={req.id} 
-                    className="glass-card" 
-                    style={{ 
-                      padding: '16px', 
-                      borderLeft: req.status === 'PENDING' ? '3px solid var(--accent-blue)' : '1px solid var(--border-glass)',
-                      background: req.status === 'PENDING' ? 'rgba(59, 130, 246, 0.03)' : 'rgba(255,255,255,0.01)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-                      <strong style={{ fontSize: '0.95rem' }}>{req.company.companyName || `${req.company.firstName} ${req.company.lastName}`}</strong>
-                      <span 
-                        style={{ 
-                          fontSize: '0.7rem', 
-                          padding: '3px 8px', 
-                          borderRadius: '12px',
-                          background: req.status === 'INTERESTED' || req.status === 'ACCEPTED' ? 'rgba(16,185,129,0.1)' : 
-                                      (req.status === 'MORE_INFO' ? 'rgba(245,158,11,0.1)' : 
-                                      (req.status === 'PENDING' ? 'rgba(59,130,246,0.1)' : 'rgba(239,68,68,0.1)')),
-                          color: req.status === 'INTERESTED' || req.status === 'ACCEPTED' ? 'var(--accent-green)' : 
-                                 (req.status === 'MORE_INFO' ? 'var(--accent-yellow)' : 
-                                 (req.status === 'PENDING' ? 'var(--accent-blue)' : 'var(--accent-red)')),
-                          fontWeight: 700
-                        }}
-                      >
-                        {req.status === 'PENDING' ? 'IN ATTESA DI VALUTAZIONE' : 
-                         req.status === 'INTERESTED' ? 'INTERESSATO A CONTATTO' :
-                         req.status === 'MORE_INFO' ? 'RICHIESTE INFO' :
-                         req.status === 'NOT_INTERESTED' ? 'NON INTERESSATO' :
-                         req.status === 'ACCEPTED' ? 'ACCETTATO' : 'RIFIUTATO'}
-                      </span>
-                    </div>
-                    
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.4' }}>{req.message}</p>
-                    
-                    {req.status === 'PENDING' && (
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
-                        <button 
-                          className="btn btn-success" 
-                          style={{ padding: '8px 12px', fontSize: '0.75rem', flex: '1 1 auto', minWidth: '150px' }} 
-                          onClick={() => handleInterviewResponse(req.id, 'INTERESTED')}
-                        >
-                          🤝 Interessato a essere contattato
-                        </button>
-                        <button 
-                          className="btn btn-warning" 
-                          style={{ padding: '8px 12px', fontSize: '0.75rem', flex: '1 1 auto', minWidth: '150px', background: 'var(--accent-yellow)', borderColor: 'var(--accent-yellow)', color: '#000' }} 
-                          onClick={() => handleInterviewResponse(req.id, 'MORE_INFO')}
-                        >
-                          ❓ Interessato ad ottenere maggiori informazioni
-                        </button>
-                        <button 
-                          className="btn btn-danger" 
-                          style={{ padding: '8px 12px', fontSize: '0.75rem', flex: '1 1 auto', minWidth: '100px' }} 
-                          onClick={() => handleInterviewResponse(req.id, 'NOT_INTERESTED')}
-                        >
-                          ✕ Non interessato
-                        </button>
-                      </div>
-                    )}
-
-                    {['ACCEPTED', 'INTERESTED', 'MORE_INFO'].includes(req.status) && (
-                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.05)', marginTop: '10px' }}>
-                        <strong>📞 Contatto Azienda:</strong> {req.company.contactPerson} {req.company.contactPhone ? ` - ${req.company.contactPhone}` : ''}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Notifiche push storiche */}
-          <div>
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#fff' }}>Storico Notifiche Push</h3>
-            {notifications.filter(n => n.type !== 'EMAIL_SIMULATION').length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', textAlign: 'center' }}>
-                Nessuna notifica ricevuta al momento.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {notifications.filter(n => n.type !== 'EMAIL_SIMULATION').map((n) => (
-                  <div key={n.id} className="glass-card" style={{ padding: '12px', background: n.read ? 'rgba(15,23,42,0.4)' : 'var(--bg-card)', borderLeft: n.read ? 'none' : '2px solid var(--accent-purple)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: '0.85rem' }}>{n.title}</strong>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                        {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', margin: '4px 0 0 0' }}>{n.message}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Email inbox simulator */}
-          <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📧 Simulatore E-mail Ricevute ({notifications.filter(n => n.type === 'EMAIL_SIMULATION').length})
-            </h3>
-            {notifications.filter(n => n.type === 'EMAIL_SIMULATION').length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', textAlign: 'center' }}>
-                Nessuna e-mail ricevuta.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {notifications.filter(n => n.type === 'EMAIL_SIMULATION').map((email) => (
-                  <div 
-                    key={email.id} 
-                    className="glass-card" 
-                    style={{ 
-                      padding: '16px', 
-                      background: 'rgba(255, 255, 255, 0.02)', 
-                      borderLeft: '4px solid var(--accent-blue)',
-                      borderRadius: '8px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px dashed var(--border-glass)', paddingBottom: '6px' }}>
-                      <strong style={{ fontSize: '0.85rem', color: 'var(--accent-blue)' }}>{email.title}</strong>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                        {new Date(email.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                      </span>
-                    </div>
-                    <pre style={{ 
-                      margin: 0, 
-                      whiteSpace: 'pre-wrap', 
-                      fontFamily: 'inherit', 
-                      fontSize: '0.8rem', 
-                      color: 'var(--text-secondary)',
-                      lineHeight: '1.4'
-                    }}>
-                      {email.message}
-                    </pre>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
-
       {showAvailModal && (
         <div className="modal-overlay" style={{ zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}>
           <div className="modal-content" style={{ maxWidth: '650px', width: '90%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -3222,6 +3137,17 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
             <h3 style={{ marginBottom: '10px', fontSize: '1.25rem', background: 'var(--grad-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>
               🟢 Attiva Ricezione Proposte
             </h3>
+            
+            {isLockoutActive() ? (
+              <div style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', marginBottom: '16px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                ℹ️ <strong>Preferenze Bloccate:</strong> Le tue preferenze di disponibilità sono attualmente bloccate. Potrai modificarle nuovamente a partire dal <strong>{getUnlockDateString()}</strong>.
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--accent-red)', padding: '10px', borderRadius: '8px', fontSize: '0.75rem', marginBottom: '16px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                ⚠️ <strong>Attenzione:</strong> Una volta confermate ed attivate, queste preferenze rimarranno <strong>bloccate per 3 mesi</strong> e non potrai modificarle. Potrai comunque attivare o disattivare la ricezione delle proposte.
+              </div>
+            )}
+
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
               Imposta i tuoi requisiti geografici e contrattuali. Verrai cercato solo per proposte che corrispondono a queste preferenze.
             </p>
@@ -3231,13 +3157,13 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
               {/* 1. CONFIGURAZIONE GEOGRAFICA */}
               <div>
                 <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
-                  1. Area Geografica di Interesse
+                  1. Area Geografica di Interesse (Seleziona una sola regione)
                 </label>
                 
                 {/* 1.1 REGIONI */}
                 <div style={{ marginBottom: '12px' }}>
                   <label className="form-label" style={{ fontWeight: 600, marginBottom: '6px', display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    1.1 Seleziona Regioni
+                    1.1 Seleziona Regione
                   </label>
                   <div style={{ 
                     display: 'grid', 
@@ -3256,7 +3182,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         <button
                           type="button"
                           key={region}
-                          onClick={() => handleToggleRegion(region)}
+                          onClick={() => {
+                            if (!isLockoutActive()) {
+                              handleToggleRegion(region);
+                            }
+                          }}
+                          disabled={isLockoutActive()}
                           style={{
                             padding: '6px 8px',
                             fontSize: '0.7rem',
@@ -3265,7 +3196,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                             border: '1px solid ' + (isSelected ? 'var(--accent-blue)' : 'var(--border-input)'),
                             background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-secondary)',
                             color: isSelected ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                            cursor: 'pointer',
+                            cursor: isLockoutActive() ? 'not-allowed' : 'pointer',
                             fontWeight: isSelected ? 600 : 'normal',
                             transition: 'all 0.15s ease'
                           }}
@@ -3301,7 +3232,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                                 <button
                                   type="button"
                                   key={prov}
-                                  onClick={() => handleToggleProvince(prov, region)}
+                                  onClick={() => {
+                                    if (!isLockoutActive()) {
+                                      handleToggleProvince(prov, region);
+                                    }
+                                  }}
+                                  disabled={isLockoutActive()}
                                   style={{
                                     padding: '5px 10px',
                                     fontSize: '0.65rem',
@@ -3309,7 +3245,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                                     border: '1px solid ' + (isSelected ? 'var(--accent-green)' : 'var(--border-input)'),
                                     background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-secondary)',
                                     color: isSelected ? 'var(--accent-green)' : 'var(--text-secondary)',
-                                    cursor: 'pointer',
+                                    cursor: isLockoutActive() ? 'not-allowed' : 'pointer',
                                     fontWeight: isSelected ? 600 : 'normal',
                                     transition: 'all 0.15s ease'
                                   }}
@@ -3324,65 +3260,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     </div>
                   </div>
                 )}
-
-                {/* 1.3 DISTANZA */}
-                {selectedProvinces.length > 0 && !selectedRegions.includes('Tutte le regioni') && (
-                  <div>
-                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '6px', display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      1.3 Imposta Distanza Massima (Km) per Provincia
-                    </label>
-                    <div style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      gap: '6px',
-                      maxHeight: '120px',
-                      overflowY: 'auto',
-                      padding: '8px',
-                      background: '#f1f5f9',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-glass)'
-                    }}>
-                      {selectedProvinces.map((prov) => (
-                        <div 
-                          key={`${prov.region}-${prov.name}`} 
-                          style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
-                            background: '#ffffff', 
-                            padding: '6px 10px', 
-                            borderRadius: '6px',
-                            border: '1px solid #e2e8f0'
-                          }}
-                        >
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            📍 {prov.name} ({prov.region})
-                          </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <input 
-                              type="range" 
-                              min="5" 
-                              max="200" 
-                              step="5"
-                              value={prov.maxDistance} 
-                              onChange={(e) => handleDistanceChange(prov.name, prov.region, Number(e.target.value))}
-                              style={{ width: '80px', cursor: 'pointer' }}
-                            />
-                            <span style={{ fontSize: '0.7rem', minWidth: '40px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>
-                              {prov.maxDistance} Km
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* 2. RUOLO CON ELENCO DI TUTTE LE PROFESSIONI */}
               <div>
                 <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
-                  2. Ruolo (Seleziona uno o più ruoli d'interesse)
+                  2. Ruolo (Seleziona al massimo 2 ruoli d'interesse)
                 </label>
                 
                 {/* Select dropdown */}
@@ -3393,9 +3276,14 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     onChange={(e) => {
                       const selected = e.target.value;
                       if (selected && !availRoles.includes(selected)) {
+                        if (availRoles.length >= 2) {
+                          alert('Puoi selezionare al massimo 2 ruoli.');
+                          return;
+                        }
                         setAvailRoles([...availRoles, selected]);
                       }
                     }}
+                    disabled={isLockoutActive()}
                   >
                     <option value="">-- Aggiungi un Ruolo --</option>
                     {PROFESSIONS.map((prof) => (
@@ -3433,12 +3321,17 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         {role}
                         <button
                           type="button"
-                          onClick={() => setAvailRoles(availRoles.filter(r => r !== role))}
+                          onClick={() => {
+                            if (!isLockoutActive()) {
+                              setAvailRoles(availRoles.filter(r => r !== role));
+                            }
+                          }}
+                          disabled={isLockoutActive()}
                           style={{
                             background: 'none',
                             border: 'none',
                             color: 'var(--accent-red)',
-                            cursor: 'pointer',
+                            cursor: isLockoutActive() ? 'not-allowed' : 'pointer',
                             fontWeight: 'bold',
                             fontSize: '0.8rem',
                             padding: '0 2px'
@@ -3469,7 +3362,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       style={{ padding: '8px' }}
                       value={minSalary}
                       onChange={(e) => setMinSalary(formatCurrencyInput(e.target.value))}
-                      disabled={noSalaryPref}
+                      disabled={noSalaryPref || isLockoutActive()}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
@@ -3480,20 +3373,23 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       style={{ padding: '8px' }}
                       value={maxSalary}
                       onChange={(e) => setMaxSalary(formatCurrencyInput(e.target.value))}
-                      disabled={noSalaryPref}
+                      disabled={noSalaryPref || isLockoutActive()}
                     />
                   </div>
                 </div>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: isLockoutActive() ? 'not-allowed' : 'pointer', color: 'var(--text-primary)' }}>
                   <input 
                     type="checkbox" 
                     checked={noSalaryPref} 
+                    disabled={isLockoutActive()}
                     onChange={(e) => {
-                      setNoSalaryPref(e.target.checked);
-                      if (e.target.checked) {
-                        setMinSalary('');
-                        setMaxSalary('');
+                      if (!isLockoutActive()) {
+                        setNoSalaryPref(e.target.checked);
+                        if (e.target.checked) {
+                          setMinSalary('');
+                          setMaxSalary('');
+                        }
                       }
                     }} 
                   />
@@ -3506,24 +3402,26 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                 <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
                   4. Tipologia Contratto Desiderato
                 </label>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1fr 1fr', 
-                  gap: '10px',
+                <div className="responsive-grid-2" style={{ 
                   background: '#f1f5f9', 
                   padding: '12px', 
                   borderRadius: '8px',
                   border: '1px solid var(--border-glass)'
                 }}>
-                  {['Determinato', 'Indeterminato', 'Part-time', 'Apprendistato', 'Partita iva', 'Nessuna preferenza'].map((c) => {
+                  {['Determinato', 'Indeterminato', 'Part-time', 'Apprendistato', 'Partita iva', 'A chiamata', 'Nessuna preferenza'].map((c) => {
                     const isChecked = selectedContracts.includes(c);
                     return (
-                      <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                      <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: isLockoutActive() ? 'not-allowed' : 'pointer', color: 'var(--text-primary)' }}>
                         <input 
                           type="checkbox" 
                           checked={isChecked} 
-                          onChange={() => handleToggleContract(c)} 
-                          style={{ cursor: 'pointer' }}
+                          disabled={isLockoutActive()}
+                          onChange={() => {
+                            if (!isLockoutActive()) {
+                              handleToggleContract(c);
+                            }
+                          }} 
+                          style={{ cursor: isLockoutActive() ? 'not-allowed' : 'pointer' }}
                         />
                         {c}
                       </label>
@@ -3541,14 +3439,17 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                   className="form-control" 
                   value={availNotes} 
                   onChange={(e) => setAvailNotes(e.target.value)} 
+                  disabled={isLockoutActive()}
                   autoComplete="off"
                   rows={3}
                 />
               </div>
 
-              <button type="submit" className="btn btn-success" style={{ marginTop: '10px', width: '100%', padding: '14px', fontSize: '0.9rem', fontWeight: 700 }}>
-                ✅ Conferma e Attiva Ricezione Proposte
-              </button>
+              {(!isLockoutActive() || profile.availabilityStatus === 'NON_DISPONIBILE') && (
+                <button type="submit" className="btn btn-success" style={{ marginTop: '10px', width: '100%', padding: '14px', fontSize: '0.9rem', fontWeight: 700 }}>
+                  {isLockoutActive() ? '✅ Riattiva Ricezione Proposte (Usa Requisiti Salvati)' : '✅ Conferma e Attiva Ricezione Proposte'}
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -3769,92 +3670,21 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
         </div>
       )}
 
-      {/* Video Presentation Recording Modal */}
-      {showVideoModal && (
-        <div className="modal-overlay" style={{ zIndex: 1200 }}>
-          <div className="modal-content" style={{ maxWidth: '550px', padding: '24px', textAlign: 'center' }}>
-            <h3 style={{ marginBottom: '12px', fontSize: '1.1rem' }}>🎥 Registra Video Presentazione</h3>
-            
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-              <div style={{ 
-                width: '320px', 
-                height: '240px', 
-                borderRadius: '8px', 
-                overflow: 'hidden', 
-                border: '2px solid var(--accent-purple)', 
-                position: 'relative',
-                background: '#000'
-              }}>
-                <video 
-                  ref={videoRecordRef} 
-                  autoPlay 
-                  playsInline 
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                />
-              </div>
-            </div>
+      {/* Video Presentation Recording Modal Removed */}
 
-            <div style={{ marginBottom: '20px' }}>
-              {isRecording ? (
-                <div style={{ color: 'var(--accent-red)', fontWeight: 'bold', fontSize: '1rem' }}>
-                  🔴 REGISTRAZIONE IN CORSO: {recordingTime}s
-                </div>
-              ) : videoPreviewUrl ? (
-                <div style={{ color: 'var(--accent-green)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                  ✓ Registrazione completata! Ascolta l'anteprima sopra.
-                </div>
-              ) : (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  Fai clic su "Inizia Registrazione" per avviare il video di presentazione.
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              {!isRecording && !videoPreviewUrl && (
-                <button type="button" className="btn btn-primary" style={{ padding: '10px 16px', fontWeight: 'bold' }} onClick={startRecording}>
-                  ⏺️ Inizia Registrazione
-                </button>
-              )}
-              {isRecording && (
-                <button type="button" className="btn btn-danger" style={{ padding: '10px 16px', fontWeight: 'bold', background: 'var(--accent-red)', color: '#fff', border: 'none' }} onClick={stopRecording}>
-                  ⏹️ Ferma Registrazione
-                </button>
-              )}
-              {videoPreviewUrl && (
-                <>
-                  <button type="button" className="btn btn-success" style={{ padding: '10px 16px', fontWeight: 'bold' }} onClick={confirmRecordedVideo}>
-                    ✅ Usa questo video
-                  </button>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '10px 16px' }} onClick={startVideoRecordingStream}>
-                    🔄 Registra di nuovo
-                  </button>
-                </>
-              )}
-              <button type="button" className="btn btn-secondary" style={{ padding: '10px 16px' }} onClick={cancelVideoRecording}>
-                Annulla
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* PROPOSAL RESPONSE MODAL */}
       {respondingProposal && (
         <div className="modal-overlay" style={{ zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="modal-content" style={{ maxWidth: '500px', width: '90%', padding: '24px', position: 'relative', background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)', borderRadius: '16px' }}>
-            <div className="modal-close" onClick={() => setRespondingProposal(null)} style={{ fontSize: '1.8rem', cursor: 'pointer', position: 'absolute', top: '15px', right: '20px', color: 'var(--text-muted)' }}>&times;</div>
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%', padding: '24px', position: 'relative', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '16px', color: '#0f172a' }}>
+            <div className="modal-close" onClick={() => setRespondingProposal(null)} style={{ fontSize: '1.8rem', cursor: 'pointer', position: 'absolute', top: '15px', right: '20px', color: '#64748b' }}>&times;</div>
             
-            <h3 style={{ fontSize: '1.2rem', color: 'var(--accent-blue)', marginBottom: '8px' }}>💼 Dettagli Proposta di Lavoro</h3>
-            <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#fff' }}>
+            <h3 style={{ fontSize: '1.2rem', color: '#0284c7', marginBottom: '8px', fontWeight: 700 }}>💼 Dettagli Proposta di Lavoro</h3>
+            <h4 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0f172a', fontWeight: 700 }}>
               Azienda: {respondingProposal.company?.companyName || 'Azienda Riservata'}
             </h4>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              <div><strong>Professioni ricercate:</strong> {(() => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', fontSize: '0.9rem', color: '#334155' }}>
+              <div><strong>Professione ricercata:</strong> {(() => {
                 try {
                   const profs = JSON.parse(respondingProposal.professions || '[]');
                   if (Array.isArray(profs)) return profs.join(', ');
@@ -3868,9 +3698,17 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                 } catch(e){}
                 return 'N/D';
               })()}</div>
-              <div><strong>Retribuzione mensile netta offerta:</strong> {respondingProposal.minSalary || respondingProposal.maxSalary ? `€ ${respondingProposal.minSalary || '0'} - € ${respondingProposal.maxSalary || 'Max'}` : 'Non specificato'}</div>
+              <div><strong>Indirizzo completo:</strong> {respondingProposal.company?.address || 'Non specificato'}{respondingProposal.company?.city ? `, ${respondingProposal.company.city}` : ''}{respondingProposal.company?.province ? ` (${respondingProposal.company.sigla || respondingProposal.company.province})` : ''}</div>
+              <div><strong>Tipologia di contratto:</strong> {(() => {
+                try {
+                  const contracts = JSON.parse(respondingProposal.contractType || '[]');
+                  if (Array.isArray(contracts)) return contracts.join(', ');
+                } catch(e){}
+                return respondingProposal.contractType || 'Nessuna preferenza';
+              })()}</div>
+              <div><strong>Retribuzione mensile netta offerta:</strong> {respondingProposal.minSalary || respondingProposal.maxSalary ? `€ ${respondingProposal.minSalary || '0'} - € ${respondingProposal.maxSalary || 'Max'}` : 'Non specificata'}</div>
               {respondingProposal.notes && (
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-glass)', fontStyle: 'italic', marginTop: '6px' }}>
+                <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontStyle: 'italic', marginTop: '6px', color: '#475569' }}>
                   💬 "{respondingProposal.notes}"
                 </div>
               )}

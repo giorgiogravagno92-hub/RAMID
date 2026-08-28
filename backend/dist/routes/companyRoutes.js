@@ -9,6 +9,7 @@ router.use(auth_1.authenticateToken);
 router.get('/search', (0, auth_1.requireRole)(['COMPANY', 'ADMIN']), companyController_1.searchWorkers);
 router.get('/profile', (0, auth_1.requireRole)(['COMPANY']), companyController_1.getProfile);
 router.put('/profile', (0, auth_1.requireRole)(['COMPANY']), companyController_1.updateCompanyProfile);
+router.post('/upload-id', (0, auth_1.requireRole)(['COMPANY']), companyController_1.uploadIdDocument);
 router.get('/workers/:id', (0, auth_1.requireRole)(['COMPANY']), companyController_1.getWorkerDetails);
 router.post('/favorites', (0, auth_1.requireRole)(['COMPANY']), companyController_1.toggleFavorite);
 router.get('/favorites', (0, auth_1.requireRole)(['COMPANY']), companyController_1.getFavorites);

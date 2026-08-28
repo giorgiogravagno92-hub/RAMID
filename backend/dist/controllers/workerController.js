@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.respondToJobProposal = exports.getProposalsForWorker = exports.uploadPhoto = exports.uploadCv = exports.respondToInterviewRequest = exports.getInterviewRequests = exports.markNotificationRead = exports.getNotifications = exports.toggleAvailability = exports.updateProfile = exports.getProfile = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../prisma"));
 const SIGLA_TO_PROVINCE = {
     "AG": "Agrigento", "AL": "Alessandria", "AN": "Ancona", "AO": "Aosta", "AR": "Arezzo",
     "AP": "Ascoli Piceno", "AT": "Asti", "AV": "Avellino", "BA": "Bari", "BT": "Barletta-Andria-Trani",
@@ -52,7 +54,7 @@ const REGIONS_AND_PROVINCES = {
 };
 const getProfile = async (req, res) => {
     try {
-        const profile = await prisma.workerProfile.findUnique({
+        const profile = await prisma_1.default.workerProfile.findUnique({
             where: { userId: req.user.id },
             include: { workExperiences: true }
         });
@@ -68,18 +70,19 @@ const getProfile = async (req, res) => {
 exports.getProfile = getProfile;
 const updateProfile = async (req, res) => {
     try {
-        const { firstName, lastName, photoUrl, city, province, region, profession, educationLevel, educationField, skills, certifications, hasLicense, hasCar, availabilityStatus, maxDistanceKm, desiredContract, desiredSalary, cvPdfUrl, videoPresentationUrl, workExperiences, availabilityRegionsProvinces, availabilityContracts, notes, educationTitles, sigla, availabilityRoles } = req.body;
+        const { firstName, lastName, photoUrl, phone, city, province, region, profession, educationLevel, educationField, skills, certifications, hasLicense, hasCar, availabilityStatus, maxDistanceKm, desiredContract, desiredSalary, cvPdfUrl, videoPresentationUrl, workExperiences, availabilityRegionsProvinces, availabilityContracts, notes, educationTitles, sigla, availabilityRoles } = req.body;
         const skillsStr = typeof skills === 'object' ? JSON.stringify(skills) : skills;
         const regionsStr = typeof availabilityRegionsProvinces === 'object' ? JSON.stringify(availabilityRegionsProvinces) : availabilityRegionsProvinces;
         const contractsStr = typeof availabilityContracts === 'object' ? JSON.stringify(availabilityContracts) : availabilityContracts;
         const educationsStr = typeof educationTitles === 'object' ? JSON.stringify(educationTitles) : educationTitles;
         const rolesStr = typeof availabilityRoles === 'object' ? JSON.stringify(availabilityRoles) : availabilityRoles;
-        const profile = await prisma.workerProfile.update({
+        const profile = await prisma_1.default.workerProfile.update({
             where: { userId: req.user.id },
             data: {
                 firstName,
                 lastName,
                 photoUrl,
+                phone,
                 city,
                 province,
                 sigla,
@@ -137,7 +140,59 @@ const toggleAvailability = async (req, res) => {
         const regionsStr = typeof availabilityRegionsProvinces === 'object' ? JSON.stringify(availabilityRegionsProvinces) : availabilityRegionsProvinces;
         const contractsStr = typeof availabilityContracts === 'object' ? JSON.stringify(availabilityContracts) : availabilityContracts;
         const rolesStr = typeof availabilityRoles === 'object' ? JSON.stringify(availabilityRoles) : availabilityRoles;
-        const profile = await prisma.workerProfile.update({
+        let parsedRoles = [];
+        try {
+            parsedRoles = JSON.parse(rolesStr || '[]');
+        }
+        catch (e) { }
+        if (status !== 'NON_DISPONIBILE' && parsedRoles.length > 2) {
+            return res.status(400).json({ error: 'Puoi selezionare al massimo 2 ruoli.' });
+        }
+        const existingProfile = await prisma_1.default.workerProfile.findUnique({
+            where: { userId: req.user.id }
+        });
+        if (!existingProfile) {
+            return res.status(404).json({ error: 'Worker profile not found' });
+        }
+        const cleanJson = (str) => {
+            try {
+                return JSON.stringify(JSON.parse(str || '[]'));
+            }
+            catch (e) {
+                return '[]';
+            }
+        };
+        const incomingRegions = cleanJson(regionsStr);
+        const existingRegions = cleanJson(existingProfile.availabilityRegionsProvinces);
+        const incomingContracts = cleanJson(contractsStr);
+        const existingContracts = cleanJson(existingProfile.availabilityContracts);
+        const incomingRoles = cleanJson(rolesStr);
+        const existingRoles = cleanJson(existingProfile.availabilityRoles);
+        const incomingSalary = desiredSalary || '';
+        const existingSalary = existingProfile.desiredSalary || '';
+        const incomingNotes = notes || '';
+        const existingNotes = existingProfile.availabilityNotes || '';
+        const isChangingDetails = (regionsStr !== undefined && incomingRegions !== existingRegions) ||
+            (availabilityContracts !== undefined && incomingContracts !== existingContracts) ||
+            (availabilityRoles !== undefined && incomingRoles !== existingRoles) ||
+            (desiredSalary !== undefined && incomingSalary !== existingSalary) ||
+            (notes !== undefined && incomingNotes !== existingNotes);
+        let updateUpdatedAt = false;
+        if (status !== 'NON_DISPONIBILE' && isChangingDetails) {
+            if (existingProfile.availabilityUpdatedAt) {
+                const lastUpdate = new Date(existingProfile.availabilityUpdatedAt);
+                const unlockDate = new Date(lastUpdate);
+                unlockDate.setMonth(unlockDate.getMonth() + 3);
+                if (new Date() < unlockDate) {
+                    const formattedUnlockDate = unlockDate.toLocaleDateString('it-IT');
+                    return res.status(400).json({
+                        error: `Non puoi modificare le tue preferenze di disponibilità prima del ${formattedUnlockDate}`
+                    });
+                }
+            }
+            updateUpdatedAt = true;
+        }
+        const profile = await prisma_1.default.workerProfile.update({
             where: { userId: req.user.id },
             data: {
                 availabilityStatus: status,
@@ -149,8 +204,9 @@ const toggleAvailability = async (req, res) => {
                     availabilityRegionsProvinces: regionsStr || '[]',
                     availabilityContracts: contractsStr || '[]',
                     availabilityRoles: rolesStr || '[]',
-                    desiredSalary,
-                    availabilityNotes: notes
+                    desiredSalary: desiredSalary || '',
+                    availabilityNotes: notes || '',
+                    ...(updateUpdatedAt ? { availabilityUpdatedAt: new Date() } : {})
                 } : {})
             },
             include: {
@@ -171,7 +227,7 @@ const toggleAvailability = async (req, res) => {
 exports.toggleAvailability = toggleAvailability;
 const getNotifications = async (req, res) => {
     try {
-        const notifications = await prisma.notification.findMany({
+        const notifications = await prisma_1.default.notification.findMany({
             where: { userId: req.user.id },
             orderBy: { createdAt: 'desc' }
         });
@@ -185,7 +241,7 @@ exports.getNotifications = getNotifications;
 const markNotificationRead = async (req, res) => {
     try {
         const { id } = req.params;
-        const notification = await prisma.notification.update({
+        const notification = await prisma_1.default.notification.update({
             where: { id, userId: req.user.id },
             data: { read: true }
         });
@@ -198,13 +254,13 @@ const markNotificationRead = async (req, res) => {
 exports.markNotificationRead = markNotificationRead;
 const getInterviewRequests = async (req, res) => {
     try {
-        const profile = await prisma.workerProfile.findUnique({
+        const profile = await prisma_1.default.workerProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!profile) {
             return res.status(404).json({ error: 'Worker profile not found' });
         }
-        const requests = await prisma.interviewRequest.findMany({
+        const requests = await prisma_1.default.interviewRequest.findMany({
             where: { workerId: profile.id },
             include: {
                 company: true
@@ -225,13 +281,13 @@ const respondToInterviewRequest = async (req, res) => {
         if (!['ACCEPTED', 'DECLINED', 'INTERESTED', 'MORE_INFO', 'NOT_INTERESTED'].includes(status)) {
             return res.status(400).json({ error: 'Invalid response status' });
         }
-        const profile = await prisma.workerProfile.findUnique({
+        const profile = await prisma_1.default.workerProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!profile) {
             return res.status(404).json({ error: 'Worker profile not found' });
         }
-        const updatedRequest = await prisma.interviewRequest.update({
+        const updatedRequest = await prisma_1.default.interviewRequest.update({
             where: { id, workerId: profile.id },
             data: { status },
             include: {
@@ -251,7 +307,7 @@ const respondToInterviewRequest = async (req, res) => {
         else if (status === 'DECLINED')
             statusText = 'Rifiutato';
         // Notify the company of the worker's decision
-        await prisma.notification.create({
+        await prisma_1.default.notification.create({
             data: {
                 userId: updatedRequest.company.userId,
                 title: 'Risposta a Proposta Iniziale',
@@ -289,7 +345,7 @@ const uploadCv = async (req, res) => {
         fs.writeFileSync(filePath, buffer);
         const fileUrl = `/uploads/${sanitizedFileName}`;
         // Update database
-        await prisma.workerProfile.update({
+        await prisma_1.default.workerProfile.update({
             where: { userId: req.user.id },
             data: { cvPdfUrl: fileUrl }
         });
@@ -326,7 +382,7 @@ const uploadPhoto = async (req, res) => {
         fs.writeFileSync(filePath, buffer);
         const fileUrl = `/uploads/${sanitizedFileName}`;
         // Update database
-        await prisma.workerProfile.update({
+        await prisma_1.default.workerProfile.update({
             where: { userId: req.user.id },
             data: { photoUrl: fileUrl }
         });
@@ -343,16 +399,18 @@ const uploadPhoto = async (req, res) => {
 exports.uploadPhoto = uploadPhoto;
 const getProposalsForWorker = async (req, res) => {
     try {
-        const worker = await prisma.workerProfile.findUnique({
+        const worker = await prisma_1.default.workerProfile.findUnique({
             where: { userId: req.user.id },
             include: { proposalResponses: true }
         });
         if (!worker) {
             return res.status(404).json({ error: 'Worker profile not found' });
         }
-        // Active proposals sent by companies
-        const activeProposals = await prisma.jobProposal.findMany({
-            where: { status: 'ACTIVE' },
+        // Active or Cancelled proposals sent by companies
+        const activeProposals = await prisma_1.default.jobProposal.findMany({
+            where: {
+                status: { in: ['ACTIVE', 'CANCELLED'] }
+            },
             include: {
                 company: true,
                 responses: {
@@ -361,6 +419,21 @@ const getProposalsForWorker = async (req, res) => {
             },
             orderBy: { createdAt: 'desc' }
         });
+        const parseSalaryRange = (salaryStr) => {
+            if (!salaryStr || salaryStr.toLowerCase().includes('nessuna preferenza')) {
+                return { min: null, max: null };
+            }
+            if (salaryStr.includes('-')) {
+                const parts = salaryStr.split('-');
+                const min = parseInt(parts[0].replace(/\D/g, ''), 10) || null;
+                const max = parseInt(parts[1].replace(/\D/g, ''), 10) || null;
+                return { min, max };
+            }
+            else {
+                const val = parseInt(salaryStr.replace(/\D/g, ''), 10) || null;
+                return { min: val, max: null };
+            }
+        };
         // Filter proposals matching candidate's profession / roles and location
         const matchedProposals = activeProposals.filter(prop => {
             let profsArr = [];
@@ -463,6 +536,85 @@ const getProposalsForWorker = async (req, res) => {
             }
             if (!matchLoc)
                 return false;
+            // Contract Match
+            let matchesContract = false;
+            let wContracts = [];
+            try {
+                wContracts = JSON.parse(worker.availabilityContracts || '[]');
+            }
+            catch (e) { }
+            if (wContracts.length === 0 || wContracts.includes('Nessuna preferenza')) {
+                matchesContract = true;
+            }
+            else {
+                let pContracts = [];
+                try {
+                    pContracts = JSON.parse(prop.contractType || '[]');
+                }
+                catch (e) {
+                    pContracts = [prop.contractType || ''];
+                }
+                matchesContract = pContracts.some(pc => wContracts.some(wc => wc.toLowerCase().trim() === pc.toLowerCase().trim()));
+            }
+            if (!matchesContract)
+                return false;
+            // Education Match
+            let reqEdus = [];
+            try {
+                reqEdus = JSON.parse(prop.educationTitle || '[]');
+            }
+            catch (e) {
+                reqEdus = [prop.educationTitle || 'Nessuna preferenza'];
+            }
+            const checkEducationMatch = (workerLevel, edusList) => {
+                if (edusList.length === 0 || edusList.includes('Nessuna preferenza')) {
+                    return true;
+                }
+                return edusList.some(edu => {
+                    const cleanEdu = edu.toLowerCase().trim();
+                    if (cleanEdu === 'licenza media') {
+                        return ['LICENZA_MEDIA', 'DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'diploma') {
+                        return ['DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'laurea triennale') {
+                        return ['LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'laurea specialistica' || cleanEdu === 'laurea magistrale' || cleanEdu === 'laurea specialistica / magistrale') {
+                        return ['LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+                    }
+                    if (cleanEdu === 'master') {
+                        return ['MASTER'].includes(workerLevel);
+                    }
+                    return false;
+                });
+            };
+            let hasEduMatch = checkEducationMatch(worker.educationLevel, reqEdus);
+            if (!hasEduMatch) {
+                let otherTitles = [];
+                try {
+                    otherTitles = JSON.parse(worker.educationTitles || '[]');
+                }
+                catch (e) { }
+                hasEduMatch = otherTitles.some((e) => checkEducationMatch(e.level, reqEdus));
+            }
+            if (!hasEduMatch)
+                return false;
+            // Salary Match
+            const wSalary = parseSalaryRange(worker.desiredSalary);
+            const pMin = prop.minSalary ? parseInt(prop.minSalary.replace(/\D/g, ''), 10) || null : null;
+            const pMax = prop.maxSalary ? parseInt(prop.maxSalary.replace(/\D/g, ''), 10) || null : null;
+            if (wSalary.min !== null || wSalary.max !== null) {
+                if (pMin !== null || pMax !== null) {
+                    if (wSalary.min !== null && pMax !== null && pMax < wSalary.min) {
+                        return false;
+                    }
+                    if (wSalary.max !== null && pMin !== null && pMin > wSalary.max) {
+                        return false;
+                    }
+                }
+            }
             return true;
         });
         res.json(matchedProposals);
@@ -480,21 +632,31 @@ const respondToJobProposal = async (req, res) => {
         if (!['ACCEPTED', 'DECLINED'].includes(status)) {
             return res.status(400).json({ error: 'Invalid response status' });
         }
-        const worker = await prisma.workerProfile.findUnique({
+        const worker = await prisma_1.default.workerProfile.findUnique({
             where: { userId: req.user.id }
         });
         if (!worker) {
             return res.status(404).json({ error: 'Worker profile not found' });
         }
-        const proposal = await prisma.jobProposal.findUnique({
+        const proposal = await prisma_1.default.jobProposal.findUnique({
             where: { id },
             include: { company: true }
         });
         if (!proposal) {
             return res.status(404).json({ error: 'Job proposal not found' });
         }
+        // 15-day expiration check
+        const proposalDate = new Date(proposal.createdAt);
+        const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+        if (new Date().getTime() - proposalDate.getTime() > fifteenDaysInMs) {
+            return res.status(400).json({ error: 'La proposta è scaduta e non è più possibile rispondere.' });
+        }
+        // Check if proposal is cancelled
+        if (proposal.status === 'CANCELLED') {
+            return res.status(400).json({ error: 'La proposta è stata annullata dal recruiter.' });
+        }
         // Upsert proposal response
-        const response = await prisma.proposalResponse.upsert({
+        const response = await prisma_1.default.proposalResponse.upsert({
             where: {
                 proposalId_workerId: {
                     proposalId: id,
@@ -510,7 +672,7 @@ const respondToJobProposal = async (req, res) => {
         });
         if (status === 'ACCEPTED') {
             // Create notification for company
-            await prisma.notification.create({
+            await prisma_1.default.notification.create({
                 data: {
                     userId: proposal.company.userId,
                     title: 'Candidato Ha Accettato!',

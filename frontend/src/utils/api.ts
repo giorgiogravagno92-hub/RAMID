@@ -1,36 +1,37 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+export const BACKEND_URL = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:5000';
+export const API_BASE_URL = `${BACKEND_URL}/api`;
 
 // Helper for local mock storage fallback
 const getMockData = (key: string, defaultValue: any) => {
-  const data = localStorage.getItem(`sono_qui_mock_${key}`);
+  const data = localStorage.getItem(`ramid_mock_${key}`);
   return data ? JSON.parse(data) : defaultValue;
 };
 
 const setMockData = (key: string, value: any) => {
-  localStorage.setItem(`sono_qui_mock_${key}`, JSON.stringify(value));
+  localStorage.setItem(`ramid_mock_${key}`, JSON.stringify(value));
 };
 
 // Initialize mock database if empty
-if (!localStorage.getItem('sono_qui_mock_initialized_v2')) {
-  localStorage.removeItem('sono_qui_mock_workers');
+if (!localStorage.getItem('ramid_mock_initialized_v2')) {
+  localStorage.removeItem('ramid_mock_workers');
   setMockData('workers', []);
   setMockData('wp_pages', {
     home: {
-      title: 'Benvenuti su Sono Qui',
+      title: 'Benvenuti su Ramid',
       content: 'La piattaforma rivoluzionaria dove le aziende cercano direttamente te. Inserisci la tua disponibilità, compila il tuo CV strutturato in 2 minuti e lasciati trovare dai migliori datori di lavoro della tua zona.',
-      seoTitle: 'Sono Qui - Trova Lavoro Subito, Fatti Cercare dalle Aziende',
-      seoDescription: 'Non perdere tempo con candidature a vuoto. Su Sono Qui inserisci il tuo profilo e sono le aziende a contattarti per colloqui diretti.'
+      seoTitle: 'Ramid - Trova Lavoro Subito, Fatti Cercare dalle Aziende',
+      seoDescription: 'Non perdere tempo con candidature a vuoto. Su Ramid inserisci il tuo profilo e sono le aziende a contattarti per colloqui diretti.'
     },
     about: {
       title: 'Chi Siamo',
-      content: 'Sono Qui nasce nel 2026 dall\'esigenza di semplificare l\'incontro tra domanda e offerta di lavoro. Crediamo che il modello tradizionale degli annunci sia obsoleto. Vogliamo dare centralità al lavoratore e alla sua disponibilità immediata, riducendo i tempi di selezione per le aziende da settimane a poche ore.',
-      seoTitle: 'Chi Siamo - La Nostra Missione | Sono Qui',
-      seoDescription: 'La storia e la missione dietro Sono Qui. Cambiamo il modo in cui cerchi lavoro e personale.'
+      content: 'Ramid nasce nel 2026 dall\'esigenza di semplificare l\'incontro tra domanda e offerta di lavoro. Crediamo che il modello tradicional degli annunci sia obsoleto. Vogliamo dare centralità al lavoratore e alla sua disponibilità immediata, riducendo i tempi di selezione per le aziende da settimane a poche ore.',
+      seoTitle: 'Chi Siamo - La Nostra Missione | Ramid',
+      seoDescription: 'La storia e la missione dietro Ramid. Cambiamo il modo in cui cerchi lavoro e personale.'
     },
     privacy: {
       title: 'Privacy & Cookie Policy',
       content: 'In conformità con il GDPR (UE 2016/679), raccogliamo e trattiamo i tuoi dati esclusivamente per erogare il servizio di intermediazione lavorativa. I tuoi dati personali, inclusi CV e contatti, saranno visibili solo alle aziende registrate e verificate sulla piattaforma.',
-      seoTitle: 'Privacy Policy e Trattamento Dati - Sono Qui',
+      seoTitle: 'Privacy Policy e Trattamento Dati - Ramid',
       seoDescription: 'Informative chiare sul trattamento dei tuoi dati personali, cookie policy e diritti degli utenti.'
     }
   });
@@ -40,9 +41,9 @@ if (!localStorage.getItem('sono_qui_mock_initialized_v2')) {
       title: 'Come ottimizzare il tuo profilo per essere assunto subito',
       slug: 'ottimizzare-profilo-assunzione-veloce',
       excerpt: 'I 5 errori da evitare nella compilazione del tuo CV digitale e come scrivere le competenze chiave.',
-      content: 'Nel mercato attuale, la velocità è tutto. Le aziende che cercano su Sono Qui vogliono sapere immediatamente cosa sai fare e quando sei disponibile...',
+      content: 'Nel mercato attuale, la velocità è tutto. Le aziende che cercano su Ramid vogliono sapere immediatamente cosa sai fare e quando sei disponibile...',
       date: '2026-07-10T09:30:00Z',
-      author: 'Redazione Sono Qui',
+      author: 'Redazione Ramid',
       imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&auto=format&fit=crop&q=60'
     }
   ]);
@@ -50,18 +51,18 @@ if (!localStorage.getItem('sono_qui_mock_initialized_v2')) {
     {
       id: 1,
       question: 'Come funziona il sistema di disponibilità?',
-      answer: 'Su Sono Qui puoi impostare il tuo stato su: "Disponibile subito" (se sei pronto a lavorare da oggi), "Valuto offerte" (se hai già un lavoro ma sei aperto ad altro) o "Non disponibile".',
+      answer: 'Su Ramid puoi impostare il tuo stato su: "Disponibile subito" (se sei pronto a lavorare da oggi), "Valuto offerte" (se hai già un lavoro ma sei aperto ad altro) o "Non disponibile".',
       category: 'Candidati'
     }
   ]);
-  localStorage.setItem('sono_qui_mock_initialized_v2', 'true');
+  localStorage.setItem('ramid_mock_initialized_v2', 'true');
 }
 
 // Check server status
 let isBackendOffline = false;
 
 const request = async (method: string, path: string, body?: any) => {
-  const token = localStorage.getItem('sono_qui_token');
+  const token = localStorage.getItem('ramid_token');
   const headers: any = {
     'Content-Type': 'application/json'
   };
@@ -102,36 +103,71 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
       email,
       role
     };
-    localStorage.setItem('sono_qui_token', 'mock-jwt-token-1234');
+    localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
+    return { token: 'mock-jwt-token-1234', user: mockUser };
+  }
+
+  if (path.startsWith('/auth/send-otp')) {
+    return { 
+      success: true, 
+      message: 'OTP inviato con successo (Simulato)', 
+      code: '123456',
+      email: body.email || 'mock-persona-fisica@example.com'
+    };
+  }
+
+  if (path.startsWith('/auth/verify-otp')) {
+    const { email } = body;
+    const mockUser = {
+      id: 'u-otp-comp',
+      email,
+      role: 'COMPANY'
+    };
+    localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
+    setMockData('company_profile', {
+      companyType: 'PERSONA_FISICA',
+      companyName: 'Persona Fisica Recruiter',
+      firstName: 'Recruiter',
+      lastName: 'Fisico',
+      contactPhone: '3331234567',
+      industry: 'Persona Fisica'
+    });
     return { token: 'mock-jwt-token-1234', user: mockUser };
   }
 
   if (path.startsWith('/auth/register')) {
     const { email, password, role, profileData } = body;
-    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-    if (password && !passwordRegex.test(password)) {
-      throw new Error('La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.');
+    const isPersonaFisica = role === 'COMPANY' && profileData?.companyType === 'PERSONA_FISICA';
+    
+    if (!isPersonaFisica) {
+      const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+      if (password && !passwordRegex.test(password)) {
+        throw new Error('La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.');
+      }
     }
     const mockUser = { id: `u-${Math.random()}`, email, role };
-    localStorage.setItem('sono_qui_token', 'mock-jwt-token-1234');
+    localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
     if (role === 'COMPANY') {
       setMockData('company_profile', {
-        companyType: 'AZIENDA',
-        companyName: profileData?.companyName || null,
+        companyType: profileData?.companyType || 'AZIENDA',
+        companyName: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || null),
+        firstName: isPersonaFisica ? profileData.firstName : null,
+        lastName: isPersonaFisica ? profileData.lastName : null,
+        fiscalCode: isPersonaFisica ? profileData.fiscalCode : null,
         address: profileData?.address || null,
         city: profileData?.city || null,
         province: profileData?.province || null,
         sigla: profileData?.sigla || null,
-        industry: profileData?.sector || profileData?.industry || 'Altro',
-        contactPerson: profileData?.companyName || 'Referente',
-        contactPhone: null
+        industry: isPersonaFisica ? 'Persona Fisica' : (profileData?.sector || profileData?.industry || 'Altro'),
+        contactPerson: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || 'Referente'),
+        contactPhone: profileData?.contactPhone || null
       });
     }
     return { token: 'mock-jwt-token-1234', user: mockUser };
   }
 
   if (path.startsWith('/auth/me')) {
-    const token = localStorage.getItem('sono_qui_token');
+    const token = localStorage.getItem('ramid_token');
     if (!token) throw new Error('Unauthorized');
     return { 
       id: 'u-work', 
@@ -226,6 +262,13 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     }
   }
 
+  if (path.startsWith('/companies/upload-id')) {
+    const current = getMockData('company_profile', {});
+    current.idDocumentUrl = '/uploads/id-card-mock.png';
+    setMockData('company_profile', current);
+    return { success: true, idDocumentUrl: '/uploads/id-card-mock.png', company: current };
+  }
+
   if (path.startsWith('/companies/search')) {
     const workers = getMockData('workers', []);
     // Simple filter simulation
@@ -263,7 +306,10 @@ export const api = {
     login: (body: any) => request('POST', '/auth/login', body),
     register: (body: any) => request('POST', '/auth/register', body),
     me: () => request('GET', '/auth/me'),
-    socialLogin: (body: any) => request('POST', '/auth/social-login', body)
+    socialLogin: (body: any) => request('POST', '/auth/social-login', body),
+    sendOtp: (body: any) => request('POST', '/auth/send-otp', body),
+    verifyOtp: (body: any) => request('POST', '/auth/verify-otp', body),
+    checkVerificationStatus: (email: string, token: string) => request('GET', `/auth/verification-status?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`)
   },
   worker: {
     getProfile: () => request('GET', '/workers/profile'),
@@ -281,6 +327,7 @@ export const api = {
   company: {
     getProfile: () => request('GET', '/companies/profile'),
     updateProfile: (body: any) => request('PUT', '/companies/profile', body),
+    uploadId: (body: any) => request('POST', '/companies/upload-id', body),
     search: (params: any) => {
       const q = new URLSearchParams(params).toString();
       return request('GET', `/companies/search?${q}`);

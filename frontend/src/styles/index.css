@@ -1,4 +1,4 @@
-/* Sono Qui - Core Design System & Styling */
+/* Ramid - Core Design System & Styling */
 
 :root {
   /* Colors */
@@ -181,7 +181,7 @@ a:hover {
   align-items: center;
 }
 .logo {
-  font-size: 1.5rem;
+  font-size: 1.85rem;
   font-weight: 800;
   background: var(--grad-primary);
   -webkit-background-clip: text;
@@ -265,8 +265,8 @@ a:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.08);
-  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  background-color: #e2e8f0;
+  border: 2px solid #94a3b8;
   transition: .4s;
   border-radius: 34px;
 }
@@ -763,6 +763,58 @@ input:checked + .slider:before {
 .flex-gap-12 { display: flex; gap: 12px; }
 
 /* Responsive adjustments */
+.hamburger-btn {
+  display: none;
+}
+
+.responsive-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.responsive-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.grid-location-fields {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr;
+  gap: 8px;
+}
+
+.responsive-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.responsive-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.dashboard-grid-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  min-height: 80vh;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+}
+
 @media (max-width: 1024px) {
   .simulator-layout {
     flex-direction: column;
@@ -785,5 +837,198 @@ input:checked + .slider:before {
   }
   .admin-columns {
     flex-direction: column;
+  }
+}
+
+/* Mobile & Tablet Optimizations (<= 768px) */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    position: relative;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .container {
+    padding: 0 16px;
+  }
+
+  .header {
+    padding: 12px 0;
+  }
+  
+  .header-wrap {
+    position: relative;
+  }
+
+  .header-actions {
+    display: none !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    width: calc(100% - 32px);
+    gap: 16px !important;
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid var(--border-glass);
+    position: absolute;
+    top: 60px;
+    left: 16px;
+    z-index: 1001;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .header-actions.open {
+    display: flex !important;
+  }
+
+  .nav-menu {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    gap: 12px;
+    padding: 0;
+    margin: 0;
+  }
+
+  .nav-link {
+    width: 100%;
+    padding: 6px 0;
+    font-size: 1rem;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+  }
+
+  .hamburger-btn {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 24px;
+    height: 18px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    z-index: 1002;
+  }
+
+  .hamburger-line {
+    width: 24px;
+    height: 2.5px;
+    background-color: var(--text-primary);
+    border-radius: 2px;
+    transition: all 0.3s ease;
+  }
+  
+  .hamburger-btn.open .hamburger-line:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+  }
+  .hamburger-btn.open .hamburger-line:nth-child(2) {
+    opacity: 0;
+  }
+  .hamburger-btn.open .hamburger-line:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+  }
+
+  .form-control-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .responsive-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .responsive-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-location-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .wp-post-card {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .wp-post-img {
+    width: 100%;
+    height: 200px;
+  }
+
+  .table-responsive {
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+  }
+
+  .dashboard-grid-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .simulator-layout {
+    display: block;
+    height: auto;
+    width: 100%;
+    background: transparent;
+  }
+
+  .simulator-info {
+    display: none !important;
+  }
+
+  .simulator-phone {
+    width: 100%;
+    padding: 0;
+    display: block;
+  }
+
+  .iphone-frame {
+    width: 100% !important;
+    height: auto !important;
+    min-height: calc(100vh - 60px) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .iphone-notch, .iphone-camera, .iphone-status-bar, .iphone-home-indicator {
+    display: none !important;
+  }
+
+  .iphone-content {
+    padding: 16px 16px 80px 16px !important;
+  }
+}
+
+/* Extra Smartphone Optimizations (<= 480px) */
+@media (max-width: 480px) {
+  .admin-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 12px 16px;
+  }
+
+  .responsive-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .responsive-card-actions {
+    align-items: stretch !important;
+    text-align: left !important;
+    width: 100%;
+  }
+
+  .responsive-card-actions button {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 }

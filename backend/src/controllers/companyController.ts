@@ -1,7 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../prisma';
 
 export const searchWorkers = async (req: any, res: Response) => {
   try {
@@ -306,6 +304,8 @@ export const updateProfile = async (req: any, res: Response) => {
       fiscalCode,
       industry,
       city,
+      province,
+      sigla,
       contactPerson,
       contactPhone,
       logoUrl
@@ -324,6 +324,8 @@ export const updateProfile = async (req: any, res: Response) => {
         fiscalCode,
         industry,
         city: companyType === 'AZIENDA' ? city : residenzaCapCitta,
+        province,
+        sigla,
         contactPerson: companyType === 'AZIENDA' ? contactPerson : `${firstName} ${lastName}`,
         contactPhone,
         logoUrl
@@ -506,8 +508,11 @@ export const updateCompanyProfile = async (req: any, res: Response) => {
       fiscalCode,
       industry,
       city,
+      province,
+      sigla,
       contactPerson,
-      contactPhone
+      contactPhone,
+      idDocumentUrl
     } = req.body;
 
     const company = await prisma.companyProfile.update({
@@ -523,8 +528,11 @@ export const updateCompanyProfile = async (req: any, res: Response) => {
         fiscalCode,
         industry,
         city,
+        province,
+        sigla,
         contactPerson,
-        contactPhone
+        contactPhone,
+        idDocumentUrl
       }
     });
 
@@ -545,7 +553,28 @@ export const createProposal = async (req: any, res: Response) => {
       return res.status(404).json({ error: 'Company profile not found' });
     }
 
-    const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status } = req.body;
+    const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status, contractType } = req.body;
+
+    let pContracts: string[] = [];
+    try {
+      pContracts = JSON.parse(contractType || '[]');
+    } catch (e) {
+      if (contractType && contractType !== 'Nessuna preferenza') {
+        pContracts = [contractType];
+      }
+    }
+
+    if (status !== 'DRAFT') {
+      if (company.companyType === 'PERSONA_FISICA' && !company.idDocumentUrl) {
+        return res.status(403).json({ error: 'Il caricamento del documento d\'identità è obbligatorio prima di poter pubblicare una proposta di lavoro.' });
+      }
+      if (pContracts.length === 0) {
+        return res.status(400).json({ error: 'Seleziona almeno una tipologia di contratto offerto (massimo 2).' });
+      }
+      if (pContracts.length > 2) {
+        return res.status(400).json({ error: 'Puoi selezionare al massimo 2 tipologie di contratto offerto.' });
+      }
+    }
 
     const profsArr: string[] = typeof professions === 'object' ? professions : JSON.parse(professions || '[]');
     const locsArr: any[] = typeof locations === 'object' ? locations : JSON.parse(locations || '[]');
@@ -557,12 +586,13 @@ export const createProposal = async (req: any, res: Response) => {
         professions: JSON.stringify(profsArr),
         locations: JSON.stringify(locsArr),
         educationTitle: educationTitle || 'Nessuna preferenza',
-        hasLicense: Boolean(hasLicense),
-        hasCar: Boolean(hasCar),
+        hasLicense: false,
+        hasCar: false,
         minSalary: minSalary || '',
         maxSalary: maxSalary || '',
         notes: notes || '',
-        status: proposalStatus
+        status: proposalStatus,
+        contractType: contractType || 'Nessuna preferenza'
       }
     });
 
@@ -617,7 +647,39 @@ export const getProposals = async (req: any, res: Response) => {
 export const updateProposal = async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status } = req.body;
+    const { professions, locations, educationTitle, hasLicense, hasCar, minSalary, maxSalary, notes, status, contractType } = req.body;
+
+    const company = await prisma.companyProfile.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!company) {
+      return res.status(404).json({ error: 'Company profile not found' });
+    }
+
+    if (status === 'ACTIVE') {
+      if (company.companyType === 'PERSONA_FISICA' && !company.idDocumentUrl) {
+        return res.status(403).json({ error: 'Il caricamento del documento d\'identità è obbligatorio prima di poter pubblicare una proposta di lavoro.' });
+      }
+    }
+
+    let pContracts: string[] = [];
+    try {
+      pContracts = JSON.parse(contractType || '[]');
+    } catch (e) {
+      if (contractType && contractType !== 'Nessuna preferenza') {
+        pContracts = [contractType];
+      }
+    }
+
+    if (status !== 'DRAFT' && contractType !== undefined) {
+      if (pContracts.length === 0) {
+        return res.status(400).json({ error: 'Seleziona almeno una tipologia di contratto offerto (massimo 2).' });
+      }
+      if (pContracts.length > 2) {
+        return res.status(400).json({ error: 'Puoi selezionare al massimo 2 tipologie di contratto offerto.' });
+      }
+    }
 
     const profsArr: string[] = typeof professions === 'object' ? professions : JSON.parse(professions || '[]');
     const locsArr: any[] = typeof locations === 'object' ? locations : JSON.parse(locations || '[]');
@@ -626,11 +688,12 @@ export const updateProposal = async (req: any, res: Response) => {
       professions: JSON.stringify(profsArr),
       locations: JSON.stringify(locsArr),
       educationTitle: educationTitle || 'Nessuna preferenza',
-      hasLicense: Boolean(hasLicense),
-      hasCar: Boolean(hasCar),
+      hasLicense: false,
+      hasCar: false,
       minSalary: minSalary || '',
       maxSalary: maxSalary || '',
-      notes: notes || ''
+      notes: notes || '',
+      contractType: contractType || 'Nessuna preferenza'
     };
 
     if (status) {
@@ -668,9 +731,20 @@ export const updateProposal = async (req: any, res: Response) => {
 export const deleteProposal = async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    await prisma.jobProposal.delete({
+    const proposal = await prisma.jobProposal.findUnique({
       where: { id }
     });
+    
+    if (proposal && proposal.status === 'ACTIVE') {
+      await prisma.jobProposal.update({
+        where: { id },
+        data: { status: 'CANCELLED' }
+      });
+    } else {
+      await prisma.jobProposal.delete({
+        where: { id }
+      });
+    }
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting proposal:', error);
@@ -762,6 +836,102 @@ const notifyMatchingWorkersOfProposal = async (proposal: any) => {
       }
       if (!matchLoc) continue;
 
+      // Contract Match
+      let matchesContract = false;
+      let wContracts: string[] = [];
+      try {
+        wContracts = JSON.parse(worker.availabilityContracts || '[]');
+      } catch (e) {}
+
+      if (wContracts.length === 0 || wContracts.includes('Nessuna preferenza')) {
+        matchesContract = true;
+      } else {
+        let pContracts: string[] = [];
+        try {
+          pContracts = JSON.parse(proposal.contractType || '[]');
+        } catch (e) {
+          pContracts = [proposal.contractType || ''];
+        }
+        matchesContract = pContracts.some(pc => 
+          wContracts.some(wc => wc.toLowerCase().trim() === pc.toLowerCase().trim())
+        );
+      }
+      if (!matchesContract) continue;
+
+      // Education Match
+      let reqEdus: string[] = [];
+      try {
+        reqEdus = JSON.parse(proposal.educationTitle || '[]');
+      } catch (e) {
+        reqEdus = [proposal.educationTitle || 'Nessuna preferenza'];
+      }
+
+      const checkEducationMatch = (workerLevel: string, edusList: string[]) => {
+        if (edusList.length === 0 || edusList.includes('Nessuna preferenza')) {
+          return true;
+        }
+        return edusList.some(edu => {
+          const cleanEdu = edu.toLowerCase().trim();
+          if (cleanEdu === 'licenza media') {
+            return ['LICENZA_MEDIA', 'DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'diploma') {
+            return ['DIPLOMA', 'LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'laurea triennale') {
+            return ['LAUREA_TRIENNALE', 'LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'laurea specialistica' || cleanEdu === 'laurea magistrale' || cleanEdu === 'laurea specialistica / magistrale') {
+            return ['LAUREA_SPECIALISTICA', 'LAUREA_MAGISTRALE', 'MASTER'].includes(workerLevel);
+          }
+          if (cleanEdu === 'master') {
+            return ['MASTER'].includes(workerLevel);
+          }
+          return false;
+        });
+      };
+
+      let hasEduMatch = checkEducationMatch(worker.educationLevel, reqEdus);
+      if (!hasEduMatch) {
+        let otherTitles: any[] = [];
+        try {
+          otherTitles = JSON.parse(worker.educationTitles || '[]');
+        } catch(e) {}
+        hasEduMatch = otherTitles.some((e: any) => checkEducationMatch(e.level, reqEdus));
+      }
+      if (!hasEduMatch) continue;
+
+      // Salary Match Check
+      const parseSalaryRange = (salaryStr: string | null | undefined) => {
+        if (!salaryStr || salaryStr.toLowerCase().includes('nessuna preferenza')) {
+          return { min: null, max: null };
+        }
+        if (salaryStr.includes('-')) {
+          const parts = salaryStr.split('-');
+          const min = parseInt(parts[0].replace(/\D/g, ''), 10) || null;
+          const max = parseInt(parts[1].replace(/\D/g, ''), 10) || null;
+          return { min, max };
+        } else {
+          const val = parseInt(salaryStr.replace(/\D/g, ''), 10) || null;
+          return { min: val, max: null };
+        }
+      };
+
+      const wSalary = parseSalaryRange(worker.desiredSalary);
+      const pMin = proposal.minSalary ? parseInt(proposal.minSalary.replace(/\D/g, ''), 10) || null : null;
+      const pMax = proposal.maxSalary ? parseInt(proposal.maxSalary.replace(/\D/g, ''), 10) || null : null;
+
+      if (wSalary.min !== null || wSalary.max !== null) {
+        if (pMin !== null || pMax !== null) {
+          if (wSalary.min !== null && pMax !== null && pMax < wSalary.min) {
+            continue;
+          }
+          if (wSalary.max !== null && pMin !== null && pMin > wSalary.max) {
+            continue;
+          }
+        }
+      }
+
       // We found a match! Create a standard notification and a simulated email notification!
       const professionsStr = profsArr.join(', ');
 
@@ -786,7 +956,7 @@ const notifyMatchingWorkersOfProposal = async (proposal: any) => {
 
         // B. Simulated email notification
         const emailSubject = `Nuova proposta di lavoro per te da ${companyName}!`;
-        const emailBody = `Da: "Sono Qui Staff" <info@sonoqui.it>
+        const emailBody = `Da: "Ramid Staff" <info@ramid.it>
 A: "${worker.firstName} ${worker.lastName}" <${worker.user.email}>
 Oggetto: ${emailSubject}
 
@@ -799,10 +969,10 @@ Dettagli della proposta:
 - Sede: ${locsArr.map(l => `${l.city || ''} (${l.sigla || l.province || ''})`).join(' / ')}
 - Retribuzione offerta: € ${proposal.minSalary || '0'} - € ${proposal.maxSalary || 'Max'} mensili netti
 
-Accedi subito al tuo pannello su Sono Qui per consultare la proposta completa e rispondere all'azienda!
+Accedi subito al tuo pannello su Ramid per consultare la proposta completa e rispondere all'azienda!
 
 Cordiali saluti,
-Il Team di Sono Qui`;
+Il Team di Ramid`;
 
         await prisma.notification.create({
           data: {
@@ -816,5 +986,50 @@ Il Team di Sono Qui`;
     }
   } catch (err) {
     console.error('Error sending matching notifications:', err);
+  }
+};
+
+export const uploadIdDocument = async (req: any, res: Response) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { base64Data } = req.body;
+
+    if (!base64Data) {
+      return res.status(400).json({ error: 'Nessun file fornito.' });
+    }
+
+    // Extract the actual base64 content
+    const base64Content = base64Data.split(';base64,').pop();
+    const buffer = Buffer.from(base64Content, 'base64');
+
+    // Create a unique file name
+    const sanitizedFileName = `id-${req.user.id}-${Date.now()}.png`;
+    const uploadsPath = path.join(__dirname, '../../uploads');
+
+    // Ensure dir exists
+    if (!fs.existsSync(uploadsPath)) {
+      fs.mkdirSync(uploadsPath, { recursive: true });
+    }
+
+    const filePath = path.join(uploadsPath, sanitizedFileName);
+    fs.writeFileSync(filePath, buffer);
+
+    const fileUrl = `/uploads/${sanitizedFileName}`;
+
+    // Update database
+    const updatedCompany = await prisma.companyProfile.update({
+      where: { userId: req.user.id },
+      data: { idDocumentUrl: fileUrl }
+    });
+
+    res.json({
+      success: true,
+      idDocumentUrl: fileUrl,
+      company: updatedCompany
+    });
+  } catch (error: any) {
+    console.error('Error uploading ID document:', error);
+    res.status(500).json({ error: 'Errore durante il caricamento del documento d\'identità.' });
   }
 };

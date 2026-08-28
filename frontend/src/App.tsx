@@ -14,6 +14,7 @@ function App() {
   const [token, setToken] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'web' | 'app'>('web');
   const [loginRole, setLoginRole] = useState<string>('WORKER');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   // Mobile simulator states
   const [mobileTab, setMobileTab] = useState<string>('profile');
@@ -45,8 +46,35 @@ function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    // Check local token on mount
-    const savedToken = localStorage.getItem('sono_qui_token');
+    // Check if token and user data are passed in URL (auto-login after email verification)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    const urlUserJson = urlParams.get('user');
+
+    if (urlToken && urlUserJson) {
+      try {
+        const decodedUser = JSON.parse(decodeURIComponent(urlUserJson));
+        localStorage.setItem('ramid_token', urlToken);
+        setToken(urlToken);
+        setCurrentUser(decodedUser);
+        
+        if (decodedUser.role === 'ADMIN') {
+          setCurrentPage('admin');
+        } else {
+          setCurrentPage('dashboard');
+          setMobileTab(decodedUser.role === 'WORKER' ? 'profile' : 'search');
+        }
+        
+        // Clean query parameters from URL bar
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      } catch (err) {
+        console.error('Error parsing auto-login user:', err);
+      }
+    }
+
+    // Otherwise, check local token on mount
+    const savedToken = localStorage.getItem('ramid_token');
     if (savedToken) {
       setToken(savedToken);
       fetchMe();
@@ -69,9 +97,10 @@ function App() {
   };
 
   const handleLoginSuccess = (user: any, userToken: string) => {
-    localStorage.setItem('sono_qui_token', userToken);
+    localStorage.setItem('ramid_token', userToken);
     setToken(userToken);
     setCurrentUser(user);
+    setMobileMenuOpen(false);
     
     if (user.role === 'ADMIN') {
       setCurrentPage('admin');
@@ -82,10 +111,11 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('sono_qui_token');
+    localStorage.removeItem('ramid_token');
     setToken(null);
     setCurrentUser(null);
     setCurrentPage('home');
+    setMobileMenuOpen(false);
   };
 
   const triggerMobileNotification = (title: string, message: string) => {
@@ -94,6 +124,7 @@ function App() {
 
   const handleNavigate = (page: string, role?: string) => {
     setCurrentPage(page);
+    setMobileMenuOpen(false);
     if (role) {
       setLoginRole(role);
     }
@@ -118,41 +149,19 @@ function App() {
       <header className="header">
         <div className="container header-wrap">
           <div className="logo" style={{ cursor: 'pointer' }} onClick={() => handleNavigate('home')}>
-            📍 Sono Qui
+            📍 Ramid
           </div>
 
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            {/* Mode Switcher */}
-            {currentPage === 'dashboard' && (
-              <div className="flex-gap-12" style={{ marginRight: '12px' }}>
-                <button 
-                  className={`btn ${layoutMode === 'web' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                  onClick={() => setLayoutMode('web')}
-                >
-                  🖥️ Portale Web
-                </button>
-                <button 
-                  className={`btn ${layoutMode === 'app' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                  onClick={() => setLayoutMode('app')}
-                >
-                  📱 App Preview
-                </button>
-              </div>
-            )}
-
+          <div className={`header-actions ${mobileMenuOpen ? 'open' : ''}`} style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
             <ul className="nav-menu">
-              {!currentUser && (
+              {!currentUser && currentPage !== 'home' && (
                 <>
                   <li className={`nav-link ${currentPage === 'home' ? 'active' : ''}`} onClick={() => handleNavigate('home')}>Home</li>
-                  <li className={`nav-link ${currentPage === 'wordpress' ? 'active' : ''}`} onClick={() => handleNavigate('wordpress')}>Sito WordPress</li>
                 </>
               )}
               {currentUser && currentUser.role === 'ADMIN' && (
                 <>
                   <li className={`nav-link ${currentPage === 'home' ? 'active' : ''}`} onClick={() => handleNavigate('home')}>Home</li>
-                  <li className={`nav-link ${currentPage === 'wordpress' ? 'active' : ''}`} onClick={() => handleNavigate('wordpress')}>Sito WordPress</li>
                   <li className={`nav-link ${currentPage === 'admin' ? 'active' : ''}`} onClick={() => handleNavigate('admin')}>Admin</li>
                 </>
               )}
@@ -178,9 +187,17 @@ function App() {
                 </div>
               )
             ) : (
-              <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={() => handleNavigate('login', 'WORKER')}>Accedi</button>
+              currentPage !== 'home' && (
+                <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={() => handleNavigate('login', 'WORKER')}>Accedi</button>
+              )
             )}
           </div>
+
+          <button className={`hamburger-btn ${mobileMenuOpen ? 'open' : ''}`} onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            <div className="hamburger-line"></div>
+            <div className="hamburger-line"></div>
+            <div className="hamburger-line"></div>
+          </button>
         </div>
       </header>
 

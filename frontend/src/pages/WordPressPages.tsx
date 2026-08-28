@@ -63,7 +63,7 @@ export const WordPressPages: React.FC = () => {
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sito Web Collegato via API REST</div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
             <button 
               style={{ background: 'none', border: 'none', color: currentPage === 'home' ? 'var(--accent-blue)' : '#94a3b8', fontWeight: 600, cursor: 'pointer' }}
               onClick={() => setCurrentPage('home')}
@@ -232,11 +232,11 @@ export const WordPressPages: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', fontSize: '0.8rem' }}>
             <div>
               <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Meta Title:</div>
-              <code style={{ color: '#d8b4fe' }}>{pageData?.seoTitle || `Blog & FAQ | Sono Qui`}</code>
+              <code style={{ color: '#d8b4fe' }}>{pageData?.seoTitle || `Blog & FAQ | Ramid`}</code>
             </div>
             <div>
               <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Meta Description:</div>
-              <code style={{ color: '#93c5fd' }}>{pageData?.seoDescription || `Leggi le guide e risposte sul portale di lavoro Sono Qui.`}</code>
+              <code style={{ color: '#93c5fd' }}>{pageData?.seoDescription || `Leggi le guide e risposte sul portale di lavoro Ramid.`}</code>
             </div>
             <div>
               <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Generato da:</div>
