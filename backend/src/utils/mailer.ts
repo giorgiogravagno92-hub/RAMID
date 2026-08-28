@@ -44,8 +44,8 @@ export const sendVerificationEmail = async (toEmail: string, verificationLink: s
   // 1. If Resend API Key is configured, send via secure HTTPS API (Port 443)
   if (resendApiKey) {
     try {
-      // By default Resend free tier allows sending from 'onboarding@resend.dev' to the registered account email
-      const fromSender = resendApiKey.startsWith('re_') && !process.env.SMTP_FROM ? 'onboarding@resend.dev' : smtpFrom;
+      // By default Resend free tier requires 'onboarding@resend.dev' unless a custom domain is verified
+      const fromSender = process.env.RESEND_FROM || 'onboarding@resend.dev';
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
