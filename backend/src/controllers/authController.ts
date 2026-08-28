@@ -196,7 +196,9 @@ export const register = async (req: Request, res: Response) => {
 
     const backendUrl = process.env.BACKEND_URL || `http://${req.get('host') || '192.168.1.58:5000'}`;
     const activationLink = `${backendUrl}/api/auth/verify-email?email=${encodeURIComponent(newUser.email)}`;
-    await sendVerificationEmail(newUser.email, activationLink);
+    sendVerificationEmail(newUser.email, activationLink).catch(err => {
+      console.error('[BACKGROUND MAILER ERROR]:', err);
+    });
 
     const registrationToken = Math.floor(100000 + Math.random() * 900000).toString();
     otpStore.set(`reg-${newUser.email}`, { code: registrationToken, expires: Date.now() + 15 * 60 * 1000 });
