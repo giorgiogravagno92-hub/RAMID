@@ -46,8 +46,32 @@ function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    // Check if token and user data are passed in URL (auto-login after email verification)
+    // Check if direct email verification is requested via URL link (?verifyEmail=...)
     const urlParams = new URLSearchParams(window.location.search);
+    const verifyEmailParam = urlParams.get('verifyEmail');
+    if (verifyEmailParam) {
+      api.auth.verifyEmailDirect(verifyEmailParam)
+        .then((data: any) => {
+          if (data && data.token && data.user) {
+            localStorage.setItem('ramid_token', data.token);
+            setToken(data.token);
+            setCurrentUser(data.user);
+            if (data.user.role === 'ADMIN') {
+              setCurrentPage('admin');
+            } else {
+              setCurrentPage('dashboard');
+              setMobileTab(data.user.role === 'WORKER' ? 'profile' : 'search');
+            }
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        })
+        .catch((err: any) => {
+          console.error('Direct email verification failed:', err);
+        });
+      return;
+    }
+
+    // Check if token and user data are passed in URL (legacy auto-login)
     const urlToken = urlParams.get('token');
     const urlUserJson = urlParams.get('user');
 

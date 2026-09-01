@@ -177,11 +177,11 @@ const register = async (req, res) => {
                 }
             });
         }
-        let backendUrl = process.env.BACKEND_URL || (req.get('host')?.includes('localhost') || req.get('host')?.includes('192.168.') ? `http://${req.get('host') || '192.168.1.58:5000'}` : `https://${req.get('host')}`);
-        if (backendUrl.startsWith('http://') && !backendUrl.includes('localhost') && !backendUrl.includes('192.168.')) {
-            backendUrl = backendUrl.replace('http://', 'https://');
+        let frontendUrl = process.env.FRONTEND_URL || (req.get('host')?.includes('localhost') || req.get('host')?.includes('192.168.') ? `http://${req.get('host')?.split(':')[0] || '192.168.1.58'}:5173` : 'https://ramid.netlify.app');
+        if (frontendUrl.startsWith('http://') && !frontendUrl.includes('localhost') && !frontendUrl.includes('192.168.')) {
+            frontendUrl = frontendUrl.replace('http://', 'https://');
         }
-        const activationLink = `${backendUrl}/api/auth/verify-email?email=${encodeURIComponent(newUser.email)}`;
+        const activationLink = `${frontendUrl}/?verifyEmail=${encodeURIComponent(newUser.email)}`;
         (0, mailer_1.sendVerificationEmail)(newUser.email, activationLink).catch(err => {
             console.error('[BACKGROUND MAILER ERROR]:', err);
         });
@@ -369,13 +369,13 @@ const socialLoginSimulation = async (req, res) => {
 exports.socialLoginSimulation = socialLoginSimulation;
 const verifyEmail = async (req, res) => {
     try {
-        const { email } = req.query;
+        const email = req.query.email || req.query.verifyEmail;
         if (!email) {
-            return res.status(400).send('<h1>Errore</h1><p>Email mancante.</p>');
+            return res.status(400).json({ error: 'Email mancante.' });
         }
         const user = await prisma_1.default.user.findUnique({ where: { email: String(email) } });
         if (!user) {
-            return res.status(404).send('<h1>Errore</h1><p>Utente non trovato.</p>');
+            return res.status(404).json({ error: 'Utente non trovato.' });
         }
         const updatedUser = await prisma_1.default.user.update({
             where: { email: String(email) },
@@ -392,47 +392,16 @@ const verifyEmail = async (req, res) => {
             role: updatedUser.role,
             profile: updatedUser.role === 'WORKER' ? updatedUser.workerProfile : updatedUser.companyProfile
         };
-        let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        if (frontendUrl.startsWith('http://') && !frontendUrl.includes('localhost') && !frontendUrl.includes('192.168.')) {
-            frontendUrl = frontendUrl.replace('http://', 'https://');
-        }
-        const redirectUrl = `${frontendUrl}/?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(userData))}`;
-        res.send(`
-      <html>
-        <head>
-          <title>Email Verificata - Ramid</title>
-          <meta http-equiv="refresh" content="3;url=${redirectUrl}" />
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; text-align: center; padding: 50px; }
-            .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px); }
-            h1 { color: #3b82f6; margin-bottom: 20px; }
-            p { font-size: 1.1rem; line-height: 1.6; color: #94a3b8; }
-            .badge { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; margin-bottom: 20px; }
-            .btn { display: inline-block; margin-top: 25px; background: #3b82f6; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; transition: background 0.2s; }
-            .btn:hover { background: #2563eb; }
-            .countdown { font-size: 0.9rem; color: #64748b; margin-top: 15px; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <div class="badge">CONFERMATO</div>
-            <h1>Email Verificata con Successo!</h1>
-            <p>Il tuo account è stato autorizzato correttamente.</p>
-            <p class="countdown">Verrai reindirizzato all'interno dell'applicazione tra pochi secondi...</p>
-            <a href="${redirectUrl}" class="btn">Entra nell'App</a>
-          </div>
-          <script>
-            setTimeout(function() {
-              window.location.href = "${redirectUrl}";
-            }, 3000);
-          </script>
-        </body>
-      </html>
-    `);
+        return res.json({
+            success: true,
+            verified: true,
+            token,
+            user: userData
+        });
     }
     catch (error) {
         console.error('Email verification error:', error);
-        res.status(500).send('<h1>Errore</h1><p>Errore interno del server durante la verifica.</p>');
+        res.status(500).json({ error: 'Errore interno del server durante la verifica.' });
     }
 };
 exports.verifyEmail = verifyEmail;
