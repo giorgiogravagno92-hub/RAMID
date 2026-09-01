@@ -177,7 +177,10 @@ const register = async (req, res) => {
                 }
             });
         }
-        const backendUrl = process.env.BACKEND_URL || `http://${req.get('host') || '192.168.1.58:5000'}`;
+        let backendUrl = process.env.BACKEND_URL || (req.get('host')?.includes('localhost') || req.get('host')?.includes('192.168.') ? `http://${req.get('host') || '192.168.1.58:5000'}` : `https://${req.get('host')}`);
+        if (backendUrl.startsWith('http://') && !backendUrl.includes('localhost') && !backendUrl.includes('192.168.')) {
+            backendUrl = backendUrl.replace('http://', 'https://');
+        }
         const activationLink = `${backendUrl}/api/auth/verify-email?email=${encodeURIComponent(newUser.email)}`;
         (0, mailer_1.sendVerificationEmail)(newUser.email, activationLink).catch(err => {
             console.error('[BACKGROUND MAILER ERROR]:', err);
@@ -389,7 +392,10 @@ const verifyEmail = async (req, res) => {
             role: updatedUser.role,
             profile: updatedUser.role === 'WORKER' ? updatedUser.workerProfile : updatedUser.companyProfile
         };
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        if (frontendUrl.startsWith('http://') && !frontendUrl.includes('localhost') && !frontendUrl.includes('192.168.')) {
+            frontendUrl = frontendUrl.replace('http://', 'https://');
+        }
         const redirectUrl = `${frontendUrl}/?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(userData))}`;
         res.send(`
       <html>
