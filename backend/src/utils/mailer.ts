@@ -6,10 +6,15 @@ const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
 const smtpFrom = process.env.SMTP_FROM || '"Ramid" <no-reply@ramid.it>';
 const resendApiKey = process.env.RESEND_API_KEY;
+const brevoApiKey = process.env.BREVO_API_KEY;
+const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || smtpUser || 'giovanni.florio92@gmail.com';
+const brevoSenderName = process.env.BREVO_SENDER_NAME || 'Ramid';
 
 let transporter: nodemailer.Transporter | null = null;
 
-if (resendApiKey) {
+if (brevoApiKey) {
+  console.log(`[MAILER] API Brevo rilevata. Verrà utilizzato l'invio tramite API Brevo HTTPS da: ${brevoSenderEmail}`);
+} else if (resendApiKey) {
   console.log('[MAILER] API Resend rilevata. Verrà utilizzato l\'invio tramite API HTTPS (Porta 443).');
 } else if (smtpHost && smtpUser && smtpPass) {
   transporter = nodemailer.createTransport({
@@ -41,10 +46,46 @@ export const sendVerificationEmail = async (toEmail: string, verificationLink: s
     </div>
   `;
 
-  // 1. If Resend API Key is configured, send via secure HTTPS API (Port 443)
+  // 1. If Brevo API Key is configured (Preferred: allows sending to ANY recipient with free verified sender)
+  if (brevoApiKey) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: brevoSenderName,
+            email: brevoSenderEmail
+          },
+          to: [
+            { email: toEmail }
+          ],
+          subject: 'Verifica il tuo Account - Ramid',
+          htmlContent: htmlContent
+        })
+      });
+
+      if (response.ok) {
+        console.log(`[MAILER - BREVO] Email di verifica inviata con successo a ${toEmail} da ${brevoSenderEmail}`);
+        return;
+      } else {
+        const errData = await response.json();
+        throw new Error(JSON.stringify(errData));
+      }
+    } catch (error: any) {
+      console.error(`[MAILER - BREVO] Errore durante l'invio via Brevo a ${toEmail}:`, error.message);
+      console.log(`[FALLBACK MAILER] Link di attivazione per ${toEmail}: ${verificationLink}`);
+      return;
+    }
+  }
+
+  // 2. If Resend API Key is configured, send via secure HTTPS API (Port 443)
   if (resendApiKey) {
     try {
-      // By default Resend free tier requires 'onboarding@resend.dev' unless a custom domain is verified
       const fromSender = process.env.RESEND_FROM || 'onboarding@resend.dev';
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -74,7 +115,7 @@ export const sendVerificationEmail = async (toEmail: string, verificationLink: s
     }
   }
 
-  // 2. Fallback to standard SMTP if configured
+  // 3. Fallback to standard SMTP if configured
   if (transporter) {
     try {
       await transporter.sendMail({
