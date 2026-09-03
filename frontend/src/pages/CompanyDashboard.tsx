@@ -33,7 +33,7 @@ const formatNumberThousands = (val: string) => {
 const isLaurea = (level: string) => level === 'LAUREA' || level === 'LAUREA_TRIENNALE' || level === 'LAUREA_SPECIALISTICA' || level === 'LAUREA_MAGISTRALE';
 
 export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobile }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'create_proposal' | 'list_proposals'>('create_proposal');
+  const [activeTab, setActiveTab] = useState<'profile' | 'create_proposal' | 'list_proposals' | 'accepted_candidates'>('create_proposal');
 
   // Company Profile states
   const [companyProfile, setCompanyProfile] = useState<any>({
@@ -551,6 +551,8 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
     );
   }
 
+  const totalAcceptedCandidates = proposals.reduce((acc, p) => acc + (p.responses || []).filter((r: any) => r.status === 'ACCEPTED').length, 0);
+
   return (
     <div className="dashboard-grid-layout" style={{ gap: '24px', minHeight: '80vh' }}>
       
@@ -662,6 +664,38 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
             {proposals.length > 0 && (
               <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700 }}>
                 {proposals.length}
+              </span>
+            )}
+          </button>
+
+          {/* Sub-item: Candidati Accettati (Contatti) */}
+          <button
+            onClick={() => {
+              fetchProposals();
+              setActiveTab('accepted_candidates');
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px 10px 24px',
+              borderRadius: '10px',
+              border: 'none',
+              background: activeTab === 'accepted_candidates' ? 'var(--accent-green)' : (totalAcceptedCandidates > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.03)'),
+              color: activeTab === 'accepted_candidates' ? '#fff' : (totalAcceptedCandidates > 0 ? 'var(--accent-green)' : 'var(--text-secondary)'),
+              fontWeight: activeTab === 'accepted_candidates' ? 700 : (totalAcceptedCandidates > 0 ? 700 : 500),
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span>🟢</span> Candidati Accettati
+            </div>
+            {totalAcceptedCandidates > 0 && (
+              <span style={{ background: activeTab === 'accepted_candidates' ? '#fff' : 'var(--accent-green)', color: activeTab === 'accepted_candidates' ? 'var(--accent-green)' : '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 800 }}>
+                {totalAcceptedCandidates}
               </span>
             )}
           </button>
@@ -1434,7 +1468,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                         </button>
                       )}
 
-                      {prop.status === 'ACTIVE' && (
+                      {(prop.status === 'ACTIVE' || acceptedResponses.length > 0) && (
                         <button
                           type="button"
                           onClick={() => setSelectedProposal(prop)}
@@ -1477,6 +1511,116 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
               })
             )}
 
+          </div>
+        )}
+
+        {/* TAB 4: TUTTI I CANDIDATI CHE HANNO ACCETTATO */}
+        {activeTab === 'accepted_candidates' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="glass-card" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🟢</span> Candidati che Hanno Accettato il Contatto Diretto ({totalAcceptedCandidates})
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  In questa sezione trovi l'elenco completo dei candidati che hanno risposto positivamente alle tue proposte di lavoro.
+                </p>
+              </div>
+            </div>
+
+            {totalAcceptedCandidates === 0 ? (
+              <div className="glass-card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⏳</div>
+                <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '6px' }}>Nessun candidato ha ancora accettato</h4>
+                <p style={{ fontSize: '0.85rem' }}>Quando un candidato idoneo accetterà una tua proposta di lavoro, la sua scheda comparirà automaticamente qui.</p>
+              </div>
+            ) : (
+              proposals.flatMap(prop => {
+                let profsList: string[] = [];
+                try { profsList = JSON.parse(prop.professions || '[]'); } catch (e) {}
+                const accepted = (prop.responses || []).filter((r: any) => r.status === 'ACCEPTED');
+                return accepted.map((res: any) => ({ ...res, proposalProfessions: profsList, proposalId: prop.id }));
+              }).map((item: any) => {
+                const worker = item.worker;
+                if (!worker) return null;
+
+                return (
+                  <div key={item.id} className="glass-card" style={{ padding: '20px', borderLeft: '4px solid var(--accent-green)', background: '#ffffff', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                    <div className="responsive-card-header" style={{ marginBottom: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--accent-green)', padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
+                            ✅ Contatto Diretto Accettato
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            per la proposta: <strong>{item.proposalProfessions.join(', ')}</strong>
+                          </span>
+                        </div>
+                        <h4 style={{ margin: '6px 0 2px 0', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+                          {worker.firstName} {worker.lastName}
+                        </h4>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--accent-blue)', fontWeight: 700 }}>
+                          💼 {worker.profession}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          📍 Residenza: {worker.city} ({worker.sigla || worker.province})
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="responsive-card-actions">
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-blue)', background: 'rgba(59,130,246,0.08)', padding: '6px 12px', borderRadius: '8px', textAlign: 'center' }}>
+                          📧 Email: {worker.user?.email || 'N/D'}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleViewWorkerCv(worker.id)}
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.8rem', padding: '8px 14px', background: 'var(--grad-primary)', border: 'none', width: '100%', minWidth: '160px', textAlign: 'center', fontWeight: 700 }}
+                        >
+                          👁️ Vedi Profilo e CV Completo
+                        </button>
+                        {worker.cvPdfUrl && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const backendUrl = api.isOffline() ? '' : BACKEND_URL;
+                              window.open(backendUrl + worker.cvPdfUrl, '_blank');
+                            }}
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.8rem', padding: '8px 14px', width: '100%', minWidth: '160px', textAlign: 'center' }}
+                          >
+                            📎 Scarica/Visualizza PDF
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {worker.notes && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic', background: '#f1f5f9', padding: '10px', borderRadius: '6px', marginBottom: '12px' }}>
+                        💬 Note Candidato: "{worker.notes}"
+                      </div>
+                    )}
+
+                    {(worker.workExperiences || []).length > 0 && (
+                      <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                        <strong style={{ fontSize: '0.8rem', color: 'var(--text-primary)', display: 'block', marginBottom: '6px' }}>
+                          🏢 Esperienze Lavorative Precedenti:
+                        </strong>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {(worker.workExperiences || []).map((exp: any, i: number) => (
+                            <div key={i} style={{ fontSize: '0.75rem', background: '#f8fafc', padding: '8px', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                              <strong>{exp.jobTitle}</strong> presso <em>{exp.companyName}</em> ({exp.period || exp.city || ''})
+                              {exp.description && <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{exp.description}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </main>
