@@ -55,6 +55,18 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
+  // Forgot Password / Access Recovery States
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotVatNumber, setForgotVatNumber] = useState('');
+  const [forgotOtpCode, setForgotOtpCode] = useState('');
+  const [newResetPassword, setNewResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotMessage, setForgotMessage] = useState('');
+
   // Recruiter Persona Fisica / OTP States
   const [companyType, setCompanyType] = useState<'AZIENDA' | 'PERSONA_FISICA'>('AZIENDA');
   const [phone, setPhone] = useState('');
@@ -120,7 +132,11 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
       if (isLogin) {
         if (role === 'WORKER') {
           // Worker Login
-          const res = await api.auth.login({ email, password });
+          const res = await api.auth.login({ 
+            email: email.trim(), 
+            password, 
+            expectedRole: 'WORKER' 
+          });
           onLoginSuccess(res.user, res.token);
         } else if (role === 'COMPANY' && companyType === 'AZIENDA') {
           // Company Login
@@ -133,7 +149,8 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
           const res = await api.auth.login({ 
             email: email.trim() || undefined, 
             password, 
-            vatNumber: cleanVat ? 'IT' + cleanVat : undefined 
+            vatNumber: cleanVat ? 'IT' + cleanVat : undefined,
+            expectedRole: 'COMPANY'
           });
           onLoginSuccess(res.user, res.token);
         } else if (role === 'COMPANY' && companyType === 'PERSONA_FISICA') {
@@ -287,24 +304,56 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
     }
   };
 
-  const handleSocialLogin = async (provider: 'google' | 'apple') => {
-    setError('');
-    setLoading(true);
+  const handleSendResetCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotMessage('');
+    setForgotLoading(true);
     try {
-      const simulatedEmail = `${provider}.demo-${Math.floor(Math.random() * 1000)}@sonoqui.it`;
-      const name = role === 'COMPANY' ? 'Azienda Social S.r.l.' : 'Giacomo Social';
-      
-      const res = await api.auth.socialLogin({
-        email: simulatedEmail,
-        name,
-        provider,
-        role
+      const cleanVat = forgotVatNumber.replace(/^IT/i, '').trim();
+      const res = await api.auth.forgotPassword({
+        email: forgotEmail.trim() || undefined,
+        vatNumber: cleanVat ? 'IT' + cleanVat : undefined
       });
+      setForgotMessage(res.message || 'Codice inviato con successo');
+      setForgotStep(2);
+    } catch (err: any) {
+      setForgotError(err.message || 'Errore durante l\'invio del codice di recupero');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handlePerformReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotMessage('');
+
+    if (newResetPassword !== confirmResetPassword) {
+      setForgotError('Le due password inserite non coincidono.');
+      return;
+    }
+
+    const passErr = validatePassword(newResetPassword);
+    if (passErr) {
+      setForgotError(passErr);
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await api.auth.resetPassword({
+        email: forgotEmail.trim(),
+        otpCode: forgotOtpCode.trim(),
+        newPassword: newResetPassword
+      });
+      alert('Password aggiornata con successo! Accesso in corso...');
+      setShowForgotPassword(false);
       onLoginSuccess(res.user, res.token);
     } catch (err: any) {
-      setError(err.message || 'Errore social login');
+      setForgotError(err.message || 'Errore durante la reimpostazione della password');
     } finally {
-      setLoading(false);
+      setForgotLoading(false);
     }
   };
 
@@ -315,7 +364,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
           {isLogin ? 'Accedi a Ramid' : 'Registrati come ' + (role === 'COMPANY' ? 'Recruiter' : 'Lavoratore')}
         </h2>
         <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>
-          Inserisci le tue credenziali o effettua l'accesso social rapido.
+          Inserisci le tue credenziali per accedere.
         </p>
 
 
@@ -668,6 +717,23 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                         👁️
                       </button>
                     </div>
+                    {isLogin && (
+                      <div style={{ textAlign: 'right', marginTop: '6px' }}>
+                        <span 
+                          style={{ color: 'var(--accent-blue)', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => {
+                            setShowForgotPassword(true);
+                            setForgotStep(1);
+                            setForgotEmail(email);
+                            setForgotVatNumber(vatNumber !== 'IT' ? vatNumber : '');
+                            setForgotError('');
+                            setForgotMessage('');
+                          }}
+                        >
+                          Hai dimenticato la password?
+                        </span>
+                      </div>
+                    )}
                     {!isLogin && (
                       <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: '1.3' }}>
                         🔒 La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.
@@ -719,30 +785,6 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                 )}
               </button>
             </form>
-
-            {role !== 'COMPANY' && (
-              <>
-                {/* Social Authentication */}
-                <div style={{ margin: '24px 0', textAlign: 'center', position: 'relative' }}>
-                  <hr style={{ border: '0', borderTop: '1px solid var(--border-glass)' }} />
-                  <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'var(--bg-secondary)', padding: '0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    OPPURE ACCEDI CON
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button 
-                    type="button"
-                    className="btn btn-secondary" 
-                    style={{ padding: '12px 24px', width: '100%', maxWidth: '320px' }}
-                    onClick={() => handleSocialLogin('google')}
-                    disabled={loading}
-                  >
-                    🌐 Accedi con Google
-                  </button>
-                </div>
-              </>
-            )}
           </>
         )}
 
@@ -836,6 +878,150 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
             >
               Chiudi e Torna al Form
             </button>
+          </div>
+        </div>
+      )}
+
+      {showForgotPassword && (
+        <div className="modal-overlay" style={{ zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="modal-content" style={{ maxWidth: '480px', width: '92%', padding: '28px 24px', position: 'relative', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '16px', color: '#0f172a', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-close" onClick={() => setShowForgotPassword(false)} style={{ fontSize: '1.8rem', cursor: 'pointer', position: 'absolute', top: '15px', right: '20px', color: '#64748b' }}>&times;</div>
+            
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🔑</div>
+              <h3 style={{ fontSize: '1.3rem', color: '#0284c7', margin: 0, fontWeight: 800 }}>Recupero Password</h3>
+              <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px' }}>
+                {forgotStep === 1 
+                  ? 'Inserisci la tua email di registrazione per ricevere il codice di sicurezza.' 
+                  : 'Inserisci il codice ricevuto via email e la tua nuova password.'}
+              </p>
+            </div>
+
+            {forgotError && (
+              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)', color: 'var(--accent-red)', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
+                ⚠️ {forgotError}
+              </div>
+            )}
+
+            {forgotMessage && (
+              <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid var(--accent-green)', color: 'var(--accent-green)', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
+                ✅ {forgotMessage}
+              </div>
+            )}
+
+            {forgotStep === 1 ? (
+              <form onSubmit={handleSendResetCode} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#475569', fontSize: '0.8rem', fontWeight: 700 }}>
+                    Indirizzo Email o PEC Registrata *
+                  </label>
+                  <input 
+                    type="email" 
+                    className="form-control" 
+                    value={forgotEmail} 
+                    onChange={(e) => setForgotEmail(e.target.value)} 
+                    placeholder="es. nome@email.it"
+                    required 
+                  />
+                </div>
+
+                {role === 'COMPANY' && (
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#475569', fontSize: '0.8rem', fontWeight: 700 }}>
+                      Oppure Partita IVA (per Aziende)
+                    </label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={forgotVatNumber} 
+                      onChange={(e) => setForgotVatNumber(e.target.value.toUpperCase())} 
+                      placeholder="es. IT12345678901"
+                    />
+                  </div>
+                )}
+
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ width: '100%', padding: '12px', marginTop: '6px', fontWeight: 700 }}
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? 'Invio in corso...' : '📩 Invia Codice di Recupero'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handlePerformReset} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#475569', fontSize: '0.8rem', fontWeight: 700 }}>
+                    Codice di Sicurezza a 6 Cifre (OTP) *
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={forgotOtpCode} 
+                    onChange={(e) => setForgotOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} 
+                    placeholder="es. 123456"
+                    style={{ textAlign: 'center', fontSize: '1.2rem', letterSpacing: '4px', fontWeight: 800 }}
+                    required 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#475569', fontSize: '0.8rem', fontWeight: 700 }}>
+                    Nuova Password *
+                  </label>
+                  <input 
+                    type="password" 
+                    className="form-control" 
+                    value={newResetPassword} 
+                    onChange={(e) => setNewResetPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    required 
+                  />
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '4px' }}>
+                    Almeno 8 caratteri, 1 maiuscola, 1 numero e 1 simbolo.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#475569', fontSize: '0.8rem', fontWeight: 700 }}>
+                    Conferma Nuova Password *
+                  </label>
+                  <input 
+                    type="password" 
+                    className="form-control" 
+                    value={confirmResetPassword} 
+                    onChange={(e) => setConfirmResetPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    required 
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="btn btn-success" 
+                  style={{ width: '100%', padding: '12px', marginTop: '6px', fontWeight: 700 }}
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? 'Salvataggio in corso...' : '🔐 Reimposta Password ed Entra'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setForgotStep(1)}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', fontSize: '0.8rem' }}
+                  >
+                    ← Torna al passo precedente
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', padding: '12px', borderRadius: '8px', fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4 }}>
+              <strong>💬 Hai perso l'accesso o non ricordi la tua email?</strong><br />
+              Contatta la nostra assistenza all'indirizzo <a href="mailto:info@ramid.it" style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>info@ramid.it</a> indicando il tuo nominativo o Partita IVA per il recupero manuale dell'account.
+            </div>
           </div>
         </div>
       )}

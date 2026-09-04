@@ -2,11 +2,12 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
-import { sendVerificationEmail } from '../utils/mailer';
+import { sendVerificationEmail, sendPasswordResetOtpEmail } from '../utils/mailer';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 // In-memory store for simulated OTPs
 export const otpStore = new Map<string, { code: string; expires: number }>();
+export const passwordResetStore = new Map<string, { code: string; expires: number }>();
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -219,7 +220,7 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password, vatNumber } = req.body;
+    const { email, password, vatNumber, expectedRole } = req.body;
 
     if (!email && !vatNumber) {
       return res.status(400).json({ error: 'PEC (Email) o Partita IVA obbligatori.' });
@@ -232,7 +233,7 @@ export const login = async (req: Request, res: Response) => {
 
     if (email) {
       user = await prisma.user.findFirst({
-        where: { email },
+        where: { email: email.trim().toLowerCase() },
         include: {
           workerProfile: true,
           companyProfile: true
@@ -263,6 +264,16 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Credenziali non valide.' });
     }
 
+    // Role-based access enforcement
+    if (expectedRole && user.role !== 'ADMIN') {
+      if (expectedRole === 'WORKER' && user.role === 'COMPANY') {
+        return res.status(403).json({ error: "Questo account è registrato come Azienda/Recruiter. Effettua l'accesso dalla sezione 'Cerco Personale'." });
+      }
+      if (expectedRole === 'COMPANY' && user.role === 'WORKER') {
+        return res.status(403).json({ error: "Questo account è registrato come Candidato. Effettua l'accesso dalla sezione 'Cerco Lavoro'." });
+      }
+    }
+
     if (!user.emailVerified) {
       return res.status(403).json({ error: 'Account non verificato. Clicca sul link di autorizzazione inviato alla tua email per completare la registrazione.' });
     }
@@ -290,6 +301,111 @@ export const login = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error during login' });
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, vatNumber } = req.body;
+    let targetUser = null;
+
+    if (email) {
+      targetUser = await prisma.user.findFirst({
+        where: { email: email.trim().toLowerCase() }
+      });
+    } else if (vatNumber) {
+      const cleanVat = vatNumber.toUpperCase().startsWith('IT') ? vatNumber : 'IT' + vatNumber;
+      const profile = await prisma.companyProfile.findFirst({
+        where: { vatNumber: cleanVat },
+        include: { user: true }
+      });
+      if (profile) {
+        targetUser = profile.user;
+      }
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Nessun account trovato con i dati inseriti. Verifica l\'indirizzo email o la Partita IVA.' });
+    }
+
+    // Generate secure 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+    passwordResetStore.set(targetUser.email.toLowerCase(), { code: otpCode, expires });
+
+    await sendPasswordResetOtpEmail(targetUser.email, otpCode);
+
+    res.json({
+      success: true,
+      message: `Codice di recupero inviato con successo a ${targetUser.email}`,
+      email: targetUser.email
+    });
+  } catch (error: any) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Errore durante l\'invio del codice di recupero' });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, otpCode, newPassword } = req.body;
+
+    if (!email || !otpCode || !newPassword) {
+      return res.status(400).json({ error: 'Email, codice OTP e nuova password sono obbligatori.' });
+    }
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({ error: 'La nuova password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const resetData = passwordResetStore.get(cleanEmail);
+
+    if (!resetData || resetData.code !== otpCode || resetData.expires < Date.now()) {
+      return res.status(400).json({ error: 'Codice di recupero non valido o scaduto. Richiedine uno nuovo.' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: cleanEmail },
+      include: { workerProfile: true, companyProfile: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utente non trovato.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash }
+    });
+
+    passwordResetStore.delete(cleanEmail);
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Password reimpostata con successo!',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        profile: user.role === 'WORKER' ? user.workerProfile : user.companyProfile
+      }
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Errore durante la reimpostazione della password' });
   }
 };
 

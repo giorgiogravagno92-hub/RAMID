@@ -333,7 +333,11 @@ const uploadCv = async (req, res) => {
         if (!base64Data) {
             return res.status(400).json({ error: 'Nessun file fornito' });
         }
-        // Extract the actual base64 content
+        // Ensure it starts with proper data URI prefix
+        const dataUri = base64Data.startsWith('data:')
+            ? base64Data
+            : `data:application/pdf;base64,${base64Data}`;
+        // Extract the actual base64 content for local file backup
         const base64Content = base64Data.split(';base64,').pop();
         const buffer = Buffer.from(base64Content, 'base64');
         // Create a unique file name
@@ -345,15 +349,14 @@ const uploadCv = async (req, res) => {
         }
         const filePath = path.join(uploadsPath, sanitizedFileName);
         fs.writeFileSync(filePath, buffer);
-        const fileUrl = `/uploads/${sanitizedFileName}`;
-        // Update database
+        // Save persistent data URI directly in database so it survives Render restarts
         await prisma_1.default.workerProfile.update({
             where: { userId: req.user.id },
-            data: { cvPdfUrl: fileUrl }
+            data: { cvPdfUrl: dataUri }
         });
         res.json({
             success: true,
-            cvPdfUrl: fileUrl
+            cvPdfUrl: dataUri
         });
     }
     catch (error) {

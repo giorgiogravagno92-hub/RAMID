@@ -133,3 +133,68 @@ export const sendVerificationEmail = async (toEmail: string, verificationLink: s
     console.log(`[MAILER - SIMULAZIONE] Link di attivazione per ${toEmail}: ${verificationLink}`);
   }
 };
+
+export const sendPasswordResetOtpEmail = async (toEmail: string, otpCode: string) => {
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <h2 style="color: #0284c7; text-align: center; margin-bottom: 8px;">Recupero Password - Ramid</h2>
+      <p style="color: #334155; font-size: 15px; text-align: center;">Abbiamo ricevuto una richiesta di reimpostazione password per il tuo account Ramid.</p>
+      
+      <div style="text-align: center; margin: 28px 0; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+        <span style="font-size: 14px; color: #64748b; display: block; margin-bottom: 6px;">Il tuo codice di recupero è:</span>
+        <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0284c7; font-family: monospace;">${otpCode}</span>
+        <span style="font-size: 12px; color: #94a3b8; display: block; margin-top: 6px;">Questo codice scadrà tra 15 minuti.</span>
+      </div>
+
+      <p style="color: #475569; font-size: 14px;">Inserisci questo codice nella schermata di recupero per impostare una nuova password per il tuo account.</p>
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #94a3b8; text-align: center;">Se non hai richiesto tu il recupero della password, puoi tranquillamente ignorare questa email.</p>
+    </div>
+  `;
+
+  if (brevoApiKey) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: brevoSenderName,
+            email: brevoSenderEmail
+          },
+          to: [{ email: toEmail }],
+          subject: `${otpCode} è il tuo codice di recupero password Ramid`,
+          htmlContent: htmlContent
+        })
+      });
+
+      if (response.ok) {
+        console.log(`[MAILER - BREVO] OTP Recupero password inviato con successo a ${toEmail}`);
+        return;
+      }
+    } catch (error: any) {
+      console.error(`[MAILER - BREVO] Errore invio OTP recupero a ${toEmail}:`, error.message);
+    }
+  }
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: smtpFrom,
+        to: toEmail,
+        subject: `${otpCode} è il tuo codice di recupero password Ramid`,
+        html: htmlContent
+      });
+      console.log(`[MAILER - SMTP] OTP inviato con successo a ${toEmail}`);
+      return;
+    } catch (err) {
+      console.error('[MAILER - SMTP] Errore invio OTP:', err);
+    }
+  }
+
+  console.log(`[FALLBACK MAILER] OTP Recupero password per ${toEmail}: ${otpCode}`);
+};

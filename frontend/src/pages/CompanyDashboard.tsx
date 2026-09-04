@@ -32,6 +32,32 @@ const formatNumberThousands = (val: string) => {
 
 const isLaurea = (level: string) => level === 'LAUREA' || level === 'LAUREA_TRIENNALE' || level === 'LAUREA_SPECIALISTICA' || level === 'LAUREA_MAGISTRALE';
 
+const handleOpenCvPdf = (pdfUrl: string) => {
+  if (!pdfUrl) return;
+  try {
+    if (pdfUrl.startsWith('data:')) {
+      const arr = pdfUrl.split(',');
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    } else {
+      const backendUrl = api.isOffline() ? '' : BACKEND_URL;
+      window.open(backendUrl + pdfUrl, '_blank');
+    }
+  } catch (err) {
+    console.error('Error opening CV PDF:', err);
+    window.open(pdfUrl, '_blank');
+  }
+};
+
 export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobile }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'create_proposal' | 'list_proposals' | 'accepted_candidates'>('create_proposal');
 
@@ -447,26 +473,26 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
   if (isProfileIncomplete) {
     return (
-      <div className="container" style={{ display: 'flex', justifyContent: 'center', padding: '60px 24px' }}>
-        <div className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '32px', textAlign: 'left' }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🏢</div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '8px', color: '#fff' }}>Completa il tuo Profilo Aziendale</h2>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              Per poter inserire proposte di lavoro e visualizzare i candidati, inserisci i dettagli della sede operativa e il settore della tua azienda.
+      <div className="container" style={{ display: 'flex', justifyContent: 'center', padding: '40px 12px' }}>
+        <div className="glass-card" style={{ width: '100%', maxWidth: '540px', padding: '24px 20px', textAlign: 'left', borderRadius: '16px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ fontSize: '2.8rem', marginBottom: '8px' }}>🏢</div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>Completa il tuo Profilo Aziendale</h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Per poter inserire proposte di lavoro e visualizzare i candidati, inserisci i dettagli della sede operativa e il settore della tua attività.
             </p>
           </div>
 
           {onboardError && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)', color: 'var(--accent-red)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem' }}>
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)', color: 'var(--accent-red)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem' }}>
               ⚠️ {onboardError}
             </div>
           )}
 
-          <form onSubmit={handleOnboardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={handleOnboardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {companyProfile.companyType !== 'PERSONA_FISICA' && (
               <div className="form-group">
-                <label className="form-label" style={{ color: '#94a3b8' }}>Indirizzo sede operativa *</label>
+                <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 700 }}>Indirizzo sede operativa *</label>
                 <input 
                   type="text" 
                   className="form-control" 
@@ -478,20 +504,21 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '12px' }}>
+            <div className="form-group">
+              <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 700 }}>Città *</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={onboardCity} 
+                onChange={(e) => setOnboardCity(formatCapitalizedWords(e.target.value))} 
+                placeholder="es. Milano"
+                required 
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '10px' }}>
               <div className="form-group">
-                <label className="form-label" style={{ color: '#94a3b8' }}>Città *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={onboardCity} 
-                  onChange={(e) => setOnboardCity(formatCapitalizedWords(e.target.value))} 
-                  placeholder="es. Milano"
-                  required 
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" style={{ color: '#94a3b8' }}>Provincia *</label>
+                <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 700 }}>Provincia *</label>
                 <select 
                   className="form-control" 
                   value={onboardProvince} 
@@ -502,20 +529,20 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                   }}
                   required
                 >
-                  <option value="">Provincia</option>
+                  <option value="">Seleziona Provincia</option>
                   {CITIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label" style={{ color: '#94a3b8' }}>Sigla</label>
+                <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 700 }}>Sigla</label>
                 <input 
                   type="text" 
                   className="form-control" 
                   value={onboardSigla} 
                   readOnly 
-                  style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'center' }}
+                  style={{ background: 'rgba(0,0,0,0.03)', textAlign: 'center', fontWeight: 700 }}
                 />
               </div>
             </div>
@@ -1583,10 +1610,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                         {worker.cvPdfUrl && (
                           <button
                             type="button"
-                            onClick={() => {
-                              const backendUrl = api.isOffline() ? '' : BACKEND_URL;
-                              window.open(backendUrl + worker.cvPdfUrl, '_blank');
-                            }}
+                            onClick={() => handleOpenCvPdf(worker.cvPdfUrl)}
                             className="btn btn-secondary"
                             style={{ fontSize: '0.8rem', padding: '8px 14px', width: '100%', minWidth: '160px', textAlign: 'center' }}
                           >
@@ -1694,10 +1718,7 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
                             {worker.cvPdfUrl && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const backendUrl = api.isOffline() ? '' : BACKEND_URL;
-                                  window.open(backendUrl + worker.cvPdfUrl, '_blank');
-                                }}
+                                onClick={() => handleOpenCvPdf(worker.cvPdfUrl)}
                                 className="btn btn-secondary"
                                 style={{ fontSize: '0.75rem', padding: '6px 12px', width: '100%', minWidth: '150px', textAlign: 'center' }}
                               >
@@ -2033,15 +2054,14 @@ export const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ onNotifyMobi
 
             <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border-glass)', paddingTop: '20px', justifyContent: 'flex-end' }}>
               {viewingWorkerCv.cvPdfUrl && (
-                <a 
-                  href={viewingWorkerCv.cvPdfUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <button 
+                  type="button"
+                  onClick={() => handleOpenCvPdf(viewingWorkerCv.cvPdfUrl)}
                   className="btn btn-primary"
-                  style={{ textDecoration: 'none', display: 'inline-block', fontSize: '0.85rem' }}
+                  style={{ fontSize: '0.85rem' }}
                 >
                   📎 Visualizza CV PDF
-                </a>
+                </button>
               )}
               <button className="btn btn-secondary" onClick={() => setViewingWorkerCv(null)} style={{ fontSize: '0.85rem' }}>Chiudi</button>
             </div>

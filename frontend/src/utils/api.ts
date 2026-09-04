@@ -309,6 +309,8 @@ export const api = {
     socialLogin: (body: any) => request('POST', '/auth/social-login', body),
     sendOtp: (body: any) => request('POST', '/auth/send-otp', body),
     verifyOtp: (body: any) => request('POST', '/auth/verify-otp', body),
+    forgotPassword: (body: any) => request('POST', '/auth/forgot-password', body),
+    resetPassword: (body: any) => request('POST', '/auth/reset-password', body),
     verifyEmailDirect: (email: string) => request('GET', `/auth/verify-email?email=${encodeURIComponent(email)}`),
     checkVerificationStatus: (email: string, token: string) => request('GET', `/auth/verification-status?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`)
   },

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pushUnsubscribe = exports.pushSubscribe = exports.checkVerificationStatus = exports.verifyOtp = exports.sendOtp = exports.verifyEmail = exports.socialLoginSimulation = exports.me = exports.login = exports.register = exports.otpStore = void 0;
+exports.pushUnsubscribe = exports.pushSubscribe = exports.checkVerificationStatus = exports.verifyOtp = exports.sendOtp = exports.verifyEmail = exports.socialLoginSimulation = exports.me = exports.resetPassword = exports.forgotPassword = exports.login = exports.register = exports.passwordResetStore = exports.otpStore = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = __importDefault(require("../prisma"));
@@ -11,6 +11,7 @@ const mailer_1 = require("../utils/mailer");
 const JWT_SECRET = process.env.JWT_SECRET;
 // In-memory store for simulated OTPs
 exports.otpStore = new Map();
+exports.passwordResetStore = new Map();
 const register = async (req, res) => {
     try {
         const { email, role, profileData } = req.body;
@@ -201,7 +202,7 @@ const register = async (req, res) => {
 exports.register = register;
 const login = async (req, res) => {
     try {
-        const { email, password, vatNumber } = req.body;
+        const { email, password, vatNumber, expectedRole } = req.body;
         if (!email && !vatNumber) {
             return res.status(400).json({ error: 'PEC (Email) o Partita IVA obbligatori.' });
         }
@@ -211,7 +212,7 @@ const login = async (req, res) => {
         let user = null;
         if (email) {
             user = await prisma_1.default.user.findFirst({
-                where: { email },
+                where: { email: email.trim().toLowerCase() },
                 include: {
                     workerProfile: true,
                     companyProfile: true
@@ -239,6 +240,15 @@ const login = async (req, res) => {
         if (!user) {
             return res.status(401).json({ error: 'Credenziali non valide.' });
         }
+        // Role-based access enforcement
+        if (expectedRole && user.role !== 'ADMIN') {
+            if (expectedRole === 'WORKER' && user.role === 'COMPANY') {
+                return res.status(403).json({ error: "Questo account è registrato come Azienda/Recruiter. Effettua l'accesso dalla sezione 'Cerco Personale'." });
+            }
+            if (expectedRole === 'COMPANY' && user.role === 'WORKER') {
+                return res.status(403).json({ error: "Questo account è registrato come Candidato. Effettua l'accesso dalla sezione 'Cerco Lavoro'." });
+            }
+        }
         if (!user.emailVerified) {
             return res.status(403).json({ error: 'Account non verificato. Clicca sul link di autorizzazione inviato alla tua email per completare la registrazione.' });
         }
@@ -263,6 +273,93 @@ const login = async (req, res) => {
     }
 };
 exports.login = login;
+const forgotPassword = async (req, res) => {
+    try {
+        const { email, vatNumber } = req.body;
+        let targetUser = null;
+        if (email) {
+            targetUser = await prisma_1.default.user.findFirst({
+                where: { email: email.trim().toLowerCase() }
+            });
+        }
+        else if (vatNumber) {
+            const cleanVat = vatNumber.toUpperCase().startsWith('IT') ? vatNumber : 'IT' + vatNumber;
+            const profile = await prisma_1.default.companyProfile.findFirst({
+                where: { vatNumber: cleanVat },
+                include: { user: true }
+            });
+            if (profile) {
+                targetUser = profile.user;
+            }
+        }
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Nessun account trovato con i dati inseriti. Verifica l\'indirizzo email o la Partita IVA.' });
+        }
+        // Generate secure 6-digit OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expires = Date.now() + 15 * 60 * 1000; // 15 minutes
+        exports.passwordResetStore.set(targetUser.email.toLowerCase(), { code: otpCode, expires });
+        await (0, mailer_1.sendPasswordResetOtpEmail)(targetUser.email, otpCode);
+        res.json({
+            success: true,
+            message: `Codice di recupero inviato con successo a ${targetUser.email}`,
+            email: targetUser.email
+        });
+    }
+    catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ error: 'Errore durante l\'invio del codice di recupero' });
+    }
+};
+exports.forgotPassword = forgotPassword;
+const resetPassword = async (req, res) => {
+    try {
+        const { email, otpCode, newPassword } = req.body;
+        if (!email || !otpCode || !newPassword) {
+            return res.status(400).json({ error: 'Email, codice OTP e nuova password sono obbligatori.' });
+        }
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.status(400).json({ error: 'La nuova password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.' });
+        }
+        const cleanEmail = email.trim().toLowerCase();
+        const resetData = exports.passwordResetStore.get(cleanEmail);
+        if (!resetData || resetData.code !== otpCode || resetData.expires < Date.now()) {
+            return res.status(400).json({ error: 'Codice di recupero non valido o scaduto. Richiedine uno nuovo.' });
+        }
+        const user = await prisma_1.default.user.findFirst({
+            where: { email: cleanEmail },
+            include: { workerProfile: true, companyProfile: true }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'Utente non trovato.' });
+        }
+        const salt = await bcryptjs_1.default.genSalt(10);
+        const passwordHash = await bcryptjs_1.default.hash(newPassword, salt);
+        await prisma_1.default.user.update({
+            where: { id: user.id },
+            data: { passwordHash }
+        });
+        exports.passwordResetStore.delete(cleanEmail);
+        const token = jsonwebtoken_1.default.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({
+            success: true,
+            message: 'Password reimpostata con successo!',
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                profile: user.role === 'WORKER' ? user.workerProfile : user.companyProfile
+            }
+        });
+    }
+    catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'Errore durante la reimpostazione della password' });
+    }
+};
+exports.resetPassword = resetPassword;
 const me = async (req, res) => {
     try {
         const user = await prisma_1.default.user.findUnique({

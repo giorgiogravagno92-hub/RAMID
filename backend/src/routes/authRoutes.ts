@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, me, socialLoginSimulation, verifyEmail, sendOtp, verifyOtp, checkVerificationStatus, pushSubscribe, pushUnsubscribe } from '../controllers/authController';
+import { register, login, me, socialLoginSimulation, verifyEmail, sendOtp, verifyOtp, checkVerificationStatus, pushSubscribe, pushUnsubscribe, forgotPassword, resetPassword } from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
 import { registerLimiter, loginLimiter, sendOtpLimiter, verifyOtpLimiter } from '../middleware/rateLimiter';
 
@@ -7,6 +7,8 @@ const router = Router();
 
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
+router.post('/forgot-password', sendOtpLimiter, forgotPassword);
+router.post('/reset-password', verifyOtpLimiter, resetPassword);
 router.get('/verify-email', verifyEmail);
 router.get('/me', authenticateToken as any, me as any);
 router.post('/social-login', socialLoginSimulation);

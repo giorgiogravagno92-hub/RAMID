@@ -49,8 +49,37 @@ const formatCapitalizedWords = (str: string) => {
   if (!str) return '';
   return str
     .split(' ')
-    .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : '')
+    .map(word => {
+      if (!word) return '';
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
     .join(' ');
+};
+
+const handleOpenCvPdf = (pdfUrl: string) => {
+  if (!pdfUrl) return;
+  try {
+    if (pdfUrl.startsWith('data:')) {
+      const arr = pdfUrl.split(',');
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    } else {
+      const backendUrl = api.isOffline() ? '' : BACKEND_URL;
+      window.open(backendUrl + pdfUrl, '_blank');
+    }
+  } catch (err) {
+    console.error('Error opening CV PDF:', err);
+    window.open(pdfUrl, '_blank');
+  }
 };
 
 export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile }) => {
@@ -526,7 +555,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       return;
     }
 
-    const salaryStr = noSalaryPref ? 'Nessuna preferenza' : (minSalary && maxSalary ? `${minSalary} - ${maxSalary}` : minSalary || '');
+    const salaryStr = (minSalary && maxSalary) ? `${minSalary} - ${maxSalary}` : (minSalary || maxSalary || '');
 
     if (!isLockoutActive()) {
       if (!window.confirm('Attenzione: Una volta confermate ed attivate, queste preferenze rimarranno bloccate per 3 mesi e non potrai modificarle. Vuoi procedere?')) {
@@ -3003,12 +3032,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                       className="btn btn-secondary" 
                       style={{ padding: '6px 10px', fontSize: '0.75rem', flex: 1 }} 
                       disabled={!profile.cvPdfUrl}
-                      onClick={() => {
-                        if (profile.cvPdfUrl) {
-                          const backendUrl = api.isOffline() ? '' : BACKEND_URL;
-                          window.open(backendUrl + profile.cvPdfUrl, '_blank');
-                        }
-                      }}
+                      onClick={() => handleOpenCvPdf(profile.cvPdfUrl)}
                     >
                       📄 {profile.cvPdfUrl ? 'Apri CV PDF' : 'Nessun PDF allegato'}
                     </button>
@@ -3212,52 +3236,52 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
       )}
       {showAvailModal && (
         <div className="modal-overlay" style={{ zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}>
-          <div className="modal-content" style={{ maxWidth: '650px', width: '90%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-content" style={{ maxWidth: '680px', width: '92%', padding: '28px 24px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '16px' }}>
             <div className="modal-close" onClick={() => setShowAvailModal(false)}>&times;</div>
             
-            <h3 style={{ marginBottom: '10px', fontSize: '1.25rem', background: 'var(--grad-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>
+            <h3 style={{ marginBottom: '12px', fontSize: '1.4rem', background: 'var(--grad-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>
               🟢 Attiva Ricezione Proposte
             </h3>
             
             {isLockoutActive() ? (
-              <div style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', marginBottom: '16px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+              <div style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)', padding: '14px', borderRadius: '10px', fontSize: '0.9rem', marginBottom: '18px', border: '1px solid rgba(59, 130, 246, 0.2)', lineHeight: 1.4 }}>
                 ℹ️ <strong>Preferenze Bloccate:</strong> Le tue preferenze di disponibilità sono attualmente bloccate. Potrai modificarle nuovamente a partire dal <strong>{getUnlockDateString()}</strong>.
               </div>
             ) : (
-              <div style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--accent-red)', padding: '10px', borderRadius: '8px', fontSize: '0.75rem', marginBottom: '16px', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <div style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--accent-red)', padding: '14px', borderRadius: '10px', fontSize: '0.85rem', marginBottom: '18px', border: '1px solid rgba(239,68,68,0.2)', lineHeight: 1.4 }}>
                 ⚠️ <strong>Attenzione:</strong> Una volta confermate ed attivate, queste preferenze rimarranno <strong>bloccate per 3 mesi</strong> e non potrai modificarle. Potrai comunque attivare o disattivare la ricezione delle proposte.
               </div>
             )}
 
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '22px', lineHeight: 1.5 }}>
               Imposta i tuoi requisiti geografici e contrattuali. Verrai cercato solo per proposte che corrispondono a queste preferenze.
             </p>
 
-            <form onSubmit={handleActivateAvailability} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <form onSubmit={handleActivateAvailability} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               
               {/* 1. CONFIGURAZIONE GEOGRAFICA */}
               <div>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
+                <label className="form-label" style={{ fontWeight: 800, marginBottom: '10px', display: 'block', fontSize: '1.05rem', color: 'var(--accent-blue)' }}>
                   1. Area Geografica di Interesse (Seleziona una sola regione)
                 </label>
                 
                 {/* 1.1 REGIONI */}
-                <div style={{ marginBottom: '12px' }}>
-                  <label className="form-label" style={{ fontWeight: 600, marginBottom: '6px', display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                <div style={{ marginBottom: '14px' }}>
+                  <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                     1.1 Seleziona Regione
                   </label>
                   <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
                     gap: '8px', 
-                    maxHeight: '140px', 
+                    maxHeight: '170px', 
                     overflowY: 'auto',
-                    padding: '8px',
+                    padding: '10px',
                     background: '#f1f5f9',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     border: '1px solid var(--border-glass)'
                   }}>
-                    {Object.keys(REGIONS_AND_PROVINCES).map((region) => {
+                    {Object.keys(REGIONS_AND_PROVINCES).filter(r => r !== 'Tutte le regioni').concat(['Tutte le regioni']).map((region) => {
                       const isSelected = selectedRegions.includes(region);
                       return (
                         <button
@@ -3270,15 +3294,15 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                           }}
                           disabled={isLockoutActive()}
                           style={{
-                            padding: '6px 8px',
-                            fontSize: '0.7rem',
+                            padding: '8px 10px',
+                            fontSize: '0.85rem',
                             textAlign: 'left',
-                            borderRadius: '6px',
+                            borderRadius: '8px',
                             border: '1px solid ' + (isSelected ? 'var(--accent-blue)' : 'var(--border-input)'),
                             background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-secondary)',
                             color: isSelected ? 'var(--accent-blue)' : 'var(--text-secondary)',
                             cursor: isLockoutActive() ? 'not-allowed' : 'pointer',
-                            fontWeight: isSelected ? 600 : 'normal',
+                            fontWeight: isSelected ? 700 : 'normal',
                             transition: 'all 0.15s ease'
                           }}
                         >
@@ -3291,22 +3315,22 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
                 {/* 1.2 PROVINCE */}
                 {selectedRegions.length > 0 && !selectedRegions.includes('Tutte le regioni') && (
-                  <div style={{ marginBottom: '12px' }}>
-                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '6px', display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ marginBottom: '14px' }}>
+                    <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                       1.2 Seleziona Province di Interesse
                     </label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       {selectedRegions.map((region) => (
                         <div key={region} style={{ 
                           background: '#f1f5f9', 
-                          padding: '10px', 
-                          borderRadius: '8px',
+                          padding: '12px', 
+                          borderRadius: '10px',
                           border: '1px solid var(--border-glass)' 
                         }}>
-                          <strong style={{ fontSize: '0.75rem', color: 'var(--accent-blue)', display: 'block', marginBottom: '6px' }}>
+                          <strong style={{ fontSize: '0.9rem', color: 'var(--accent-blue)', display: 'block', marginBottom: '8px' }}>
                             📍 Reg. {region}
                           </strong>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {(REGIONS_AND_PROVINCES[region] || []).map((prov) => {
                               const isSelected = selectedProvinces.some(p => p.name === prov && p.region === region);
                               return (
@@ -3320,14 +3344,14 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                                   }}
                                   disabled={isLockoutActive()}
                                   style={{
-                                    padding: '5px 10px',
-                                    fontSize: '0.65rem',
-                                    borderRadius: '12px',
+                                    padding: '7px 12px',
+                                    fontSize: '0.82rem',
+                                    borderRadius: '16px',
                                     border: '1px solid ' + (isSelected ? 'var(--accent-green)' : 'var(--border-input)'),
                                     background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-secondary)',
                                     color: isSelected ? 'var(--accent-green)' : 'var(--text-secondary)',
                                     cursor: isLockoutActive() ? 'not-allowed' : 'pointer',
-                                    fontWeight: isSelected ? 600 : 'normal',
+                                    fontWeight: isSelected ? 700 : 'normal',
                                     transition: 'all 0.15s ease'
                                   }}
                                 >
@@ -3345,15 +3369,16 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
               {/* 2. RUOLO CON ELENCO DI TUTTE LE PROFESSIONI */}
               <div>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
+                <label className="form-label" style={{ fontWeight: 800, marginBottom: '10px', display: 'block', fontSize: '1.05rem', color: 'var(--accent-blue)' }}>
                   2. Ruolo (Seleziona al massimo 2 ruoli d'interesse)
                 </label>
                 
                 {/* Select dropdown */}
-                <div style={{ marginBottom: '8px' }}>
+                <div style={{ marginBottom: '10px' }}>
                   <select
                     className="form-control"
                     value=""
+                    style={{ fontSize: '0.95rem', padding: '10px 12px' }}
                     onChange={(e) => {
                       const selected = e.target.value;
                       if (selected && !availRoles.includes(selected)) {
@@ -3377,11 +3402,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                 {availRoles.length > 0 ? (
                   <div style={{ 
                     display: 'flex', 
-                    gap: '6px', 
+                    gap: '8px', 
                     flexWrap: 'wrap', 
-                    padding: '10px', 
+                    padding: '12px', 
                     background: '#f1f5f9', 
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     border: '1px solid var(--border-glass)'
                   }}>
                     {availRoles.map((role) => (
@@ -3390,13 +3415,13 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                         style={{ 
                           background: 'rgba(59,130,246,0.1)', 
                           color: 'var(--accent-blue)', 
-                          padding: '4px 8px', 
-                          borderRadius: '6px', 
-                          fontSize: '0.75rem', 
+                          padding: '6px 12px', 
+                          borderRadius: '8px', 
+                          fontSize: '0.85rem', 
                           display: 'inline-flex', 
                           alignItems: 'center', 
-                          gap: '6px',
-                          fontWeight: 600
+                          gap: '8px',
+                          fontWeight: 700
                         }}
                       >
                         {role}
@@ -3414,7 +3439,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                             color: 'var(--accent-red)',
                             cursor: isLockoutActive() ? 'not-allowed' : 'pointer',
                             fontWeight: 'bold',
-                            fontSize: '0.8rem',
+                            fontSize: '0.95rem',
                             padding: '0 2px'
                           }}
                         >
@@ -3424,75 +3449,60 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Nessun ruolo selezionato. Verrai cercato per la tua professione principale.</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun ruolo selezionato. Verrai cercato per la tua professione principale.</p>
                 )}
               </div>
 
               {/* 3. REDDITO DESIDERATO (MIN E MAX) */}
               <div>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
+                <label className="form-label" style={{ fontWeight: 800, marginBottom: '10px', display: 'block', fontSize: '1.05rem', color: 'var(--accent-blue)' }}>
                   3. Reddito Desiderato (Mensile Netto)
                 </label>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '3px' }}>Minimo</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>Minimo (€)</label>
                     <input 
                       type="text" 
                       className="form-control" 
-                      style={{ padding: '8px' }}
+                      style={{ padding: '10px 12px', fontSize: '0.95rem' }}
+                      placeholder="es. 1.200"
                       value={minSalary}
                       onChange={(e) => setMinSalary(formatCurrencyInput(e.target.value))}
-                      disabled={noSalaryPref || isLockoutActive()}
+                      disabled={isLockoutActive()}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '3px' }}>Massimo</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>Massimo (€)</label>
                     <input 
                       type="text" 
                       className="form-control" 
-                      style={{ padding: '8px' }}
+                      style={{ padding: '10px 12px', fontSize: '0.95rem' }}
+                      placeholder="es. 2.500"
                       value={maxSalary}
                       onChange={(e) => setMaxSalary(formatCurrencyInput(e.target.value))}
-                      disabled={noSalaryPref || isLockoutActive()}
+                      disabled={isLockoutActive()}
                     />
                   </div>
                 </div>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: isLockoutActive() ? 'not-allowed' : 'pointer', color: 'var(--text-primary)' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={noSalaryPref} 
-                    disabled={isLockoutActive()}
-                    onChange={(e) => {
-                      if (!isLockoutActive()) {
-                        setNoSalaryPref(e.target.checked);
-                        if (e.target.checked) {
-                          setMinSalary('');
-                          setMaxSalary('');
-                        }
-                      }
-                    }} 
-                  />
-                  Nessuna preferenza
-                </label>
               </div>
 
               {/* 4. CONTRATTO DESIDERATO */}
               <div>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: '8px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
+                <label className="form-label" style={{ fontWeight: 800, marginBottom: '10px', display: 'block', fontSize: '1.05rem', color: 'var(--accent-blue)' }}>
                   4. Tipologia Contratto Desiderato
                 </label>
                 <div className="responsive-grid-2" style={{ 
                   background: '#f1f5f9', 
-                  padding: '12px', 
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-glass)'
+                  padding: '14px', 
+                  borderRadius: '10px', 
+                  border: '1px solid var(--border-glass)',
+                  gap: '12px'
                 }}>
                   {['Determinato', 'Indeterminato', 'Part-time', 'Apprendistato', 'Partita iva', 'A chiamata', 'Nessuna preferenza'].map((c) => {
                     const isChecked = selectedContracts.includes(c);
                     return (
-                      <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: isLockoutActive() ? 'not-allowed' : 'pointer', color: 'var(--text-primary)' }}>
+                      <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', cursor: isLockoutActive() ? 'not-allowed' : 'pointer', color: 'var(--text-primary)', fontWeight: isChecked ? 600 : 'normal' }}>
                         <input 
                           type="checkbox" 
                           checked={isChecked} 
@@ -3502,7 +3512,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                               handleToggleContract(c);
                             }
                           }} 
-                          style={{ cursor: isLockoutActive() ? 'not-allowed' : 'pointer' }}
+                          style={{ cursor: isLockoutActive() ? 'not-allowed' : 'pointer', width: '18px', height: '18px' }}
                         />
                         {c}
                       </label>
@@ -3513,7 +3523,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
 
               {/* 5. CAMPO NOTE */}
               <div>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: '6px', display: 'block', fontSize: '0.9rem', color: 'var(--accent-blue)' }}>
+                <label className="form-label" style={{ fontWeight: 800, marginBottom: '8px', display: 'block', fontSize: '1.05rem', color: 'var(--accent-blue)' }}>
                   5. Note Aggiuntive per le Aziende
                 </label>
                 <textarea 
@@ -3523,12 +3533,13 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ onNotifyMobile
                   disabled={isLockoutActive()}
                   autoComplete="off"
                   rows={3}
+                  style={{ fontSize: '0.95rem', padding: '10px 12px' }}
                 />
               </div>
 
               {(!isLockoutActive() || profile.availabilityStatus === 'NON_DISPONIBILE') && (
-                <button type="submit" className="btn btn-success" style={{ marginTop: '10px', width: '100%', padding: '14px', fontSize: '0.9rem', fontWeight: 700 }}>
-                  {isLockoutActive() ? '✅ Riattiva Ricezione Proposte (Usa Requisiti Salvati)' : '✅ Conferma e Attiva Ricezione Proposte'}
+                <button type="submit" className="btn btn-success" style={{ marginTop: '10px', width: '100%', padding: '14px', fontSize: '1rem', fontWeight: 800 }}>
+                  💾 Salva e Attiva Preferenze
                 </button>
               )}
             </form>

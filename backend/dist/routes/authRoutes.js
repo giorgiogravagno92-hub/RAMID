@@ -7,6 +7,8 @@ const rateLimiter_1 = require("../middleware/rateLimiter");
 const router = (0, express_1.Router)();
 router.post('/register', rateLimiter_1.registerLimiter, authController_1.register);
 router.post('/login', rateLimiter_1.loginLimiter, authController_1.login);
+router.post('/forgot-password', rateLimiter_1.sendOtpLimiter, authController_1.forgotPassword);
+router.post('/reset-password', rateLimiter_1.verifyOtpLimiter, authController_1.resetPassword);
 router.get('/verify-email', authController_1.verifyEmail);
 router.get('/me', auth_1.authenticateToken, authController_1.me);
 router.post('/social-login', authController_1.socialLoginSimulation);
