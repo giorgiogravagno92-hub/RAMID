@@ -6,6 +6,7 @@ import { CompanyDashboard } from './pages/CompanyDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { WordPressPages } from './pages/WordPressPages';
 import { MobileSimulator } from './components/MobileSimulator';
+import { InstallAppBanner } from './components/InstallAppBanner';
 import { api } from './utils/api';
 
 function App() {
@@ -176,7 +177,7 @@ function App() {
             📍 Ramid
           </div>
 
-          <div className={`header-actions ${mobileMenuOpen ? 'open' : ''}`} style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <div className={`header-actions ${mobileMenuOpen ? 'open' : ''}`} style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <ul className="nav-menu">
               {!currentUser && currentPage !== 'home' && (
                 <>
@@ -190,6 +191,31 @@ function App() {
                 </>
               )}
             </ul>
+
+            {/* Pulsante rapido Scarica / Installa App */}
+            <button
+              className="btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                color: '#0284c7',
+                borderRadius: '10px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                setMobileMenuOpen(false);
+                window.dispatchEvent(new CustomEvent('trigger-pwa-install'));
+              }}
+            >
+              <span>📲</span>
+              <span>Scarica App</span>
+            </button>
 
             {currentUser ? (
               currentUser.role === 'WORKER' ? (
@@ -270,6 +296,9 @@ function App() {
           )
         )}
       </main>
+
+      {/* PWA Direct Installation Banner & iOS Guide */}
+      <InstallAppBanner />
     </div>
   );
 }

@@ -51,6 +51,54 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
             <span style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>Accedi o Registrati</span>
           </div>
         </div>
+
+        {/* PWA App Download Banner in Hero */}
+        <div style={{ marginTop: '48px', display: 'flex', justifyContent: 'center' }}>
+          <div 
+            onClick={() => window.dispatchEvent(new CustomEvent('trigger-pwa-install'))}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 20px',
+              background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              borderRadius: '50px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.03)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = '#3b82f6';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.25)';
+            }}
+          >
+            <span style={{ fontSize: '1.4rem' }}>📲</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Vuoi scaricare l'App sul tuo cellulare?
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                Tocca qui per installare Ramid direttamente sulla schermata Home
+              </div>
+            </div>
+            <span style={{ 
+              backgroundColor: '#0284c7', 
+              color: '#ffffff', 
+              fontSize: '0.75rem', 
+              fontWeight: 700, 
+              padding: '4px 10px', 
+              borderRadius: '20px',
+              marginLeft: '6px'
+            }}>
+              Installa
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
