@@ -8,6 +8,13 @@
   NODE_VERSION = "20"
 
 [[redirects]]
+  from = "/ramid.apk"
+  to = "https://github.com/giorgiogravagno92-hub/RAMID/releases/download/latest/ramid.apk"
+  status = 302
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
