@@ -31,10 +31,9 @@ jobs:
       - name: Build Web Frontend
         run: npm run build --workspace=frontend
 
-      - name: Copy Web Assets to Android Project
-        run: |
-          mkdir -p frontend/android/app/src/main/assets/public
-          cp -r frontend/dist/* frontend/android/app/src/main/assets/public/
+      - name: Sync Capacitor Android
+        working-directory: frontend
+        run: npx cap sync android
 
       - name: Set up Java JDK 21
         uses: actions/setup-java@v4
