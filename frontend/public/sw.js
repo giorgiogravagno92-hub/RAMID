@@ -1,15 +1,19 @@
-const CACHE_NAME = 'ramid-cache-v1';
+const CACHE_NAME = 'ramid-cache-v2';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
   '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      return Promise.allSettled(
+        ASSETS.map((url) => cache.add(url).catch((err) => console.warn('Cache fallback for', url, err)))
+      );
     }).then(() => self.skipWaiting())
   );
 });
