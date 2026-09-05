@@ -10,7 +10,7 @@ export const InstallAppBanner: React.FC = () => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const [installedSuccess, setInstalledSuccess] = useState<boolean>(false);
 
-  const APK_DOWNLOAD_URL = 'https://github.com/giorgiogravagno92-hub/RAMID/releases/download/latest/ramid.apk';
+  const APK_DOWNLOAD_URL = '/ramid.apk';
 
   useEffect(() => {
     // 1. Check if running in standalone mode (already installed app)
