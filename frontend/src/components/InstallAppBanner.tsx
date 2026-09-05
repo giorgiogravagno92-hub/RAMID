@@ -354,96 +354,69 @@ export const InstallAppBanner: React.FC = () => {
                     <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                     <div style={{ fontSize: '0.86rem', color: '#92400e', lineHeight: '1.35' }}>
                       <strong>Sei dentro un'app (WhatsApp/Facebook/Instagram):</strong><br />
-                      Tocca i <strong>3 puntini ⋮</strong> in alto a destra e seleziona <strong>"Apri nel browser"</strong> o <strong>"Apri in Chrome"</strong> per completare l'installazione in 1 secondo.
+                      Tocca i <strong>3 puntini ⋮</strong> in alto a destra e seleziona <strong>"Apri nel browser"</strong> o <strong>"Apri in Chrome"</strong>.
                     </div>
                   </div>
                 )}
 
-                {/* Guida Passo-Passo Android Chrome */}
+                {/* Box Download File APK */}
                 <div style={{
+                  background: '#f0f9ff',
+                  border: '2px solid #0284c7',
+                  padding: '14px 16px',
+                  borderRadius: '16px',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.3rem' }}>🤖</span>
+                      <strong style={{ color: '#0369a1', fontSize: '0.98rem' }}>Scarica File APK (.apk)</strong>
+                    </div>
+                    <span style={{ backgroundColor: '#0284c7', color: '#fff', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: '6px' }}>
+                      Stile Sisal
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#334155' }}>
+                    Scarica il file APK e tocca <strong>"Installa"</strong> quando completato:
+                  </p>
+                  <a
+                    href="https://github.com/giorgiogravagno92-hub/RAMID/releases/download/latest/ramid.apk"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '12px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #3b82f6 100%)',
+                      color: '#ffffff',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      fontSize: '0.92rem',
+                      textDecoration: 'none',
+                      boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
+                    }}
+                  >
+                    <span>📥</span> Scarica ramid.apk sul telefono
+                  </a>
+                </div>
+
+                {/* Alternativa: Installazione Istantanea da Chrome */}
+                <div style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
                   padding: '14px 16px',
-                  borderRadius: '16px'
-                }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: '#e0f2fe',
-                    color: '#0284c7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 800,
-                    flexShrink: 0
-                  }}>
-                    1
-                  </div>
-                  <div style={{ fontSize: '0.92rem', color: '#1e293b', lineHeight: '1.4' }}>
-                    Tocca i <strong>3 puntini di menu (⋮)</strong> in alto a destra nel browser Chrome (oppure l'icona ☰ su Samsung Internet).
-                  </div>
-                </div>
-
-                <div style={{
+                  borderRadius: '16px',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  background: '#ede9fe',
-                  border: '1px solid #ddd6fe',
-                  padding: '14px 16px',
-                  borderRadius: '16px'
+                  flexDirection: 'column',
+                  gap: '6px'
                 }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: '#8b5cf6',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 800,
-                    flexShrink: 0
-                  }}>
-                    2
-                  </div>
-                  <div style={{ fontSize: '0.92rem', color: '#4c1d95', lineHeight: '1.4' }}>
-                    Seleziona <strong>"Installa app"</strong> oppure <strong>"Aggiungi a schermata Home" 📲</strong>.
-                  </div>
-                </div>
-
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  background: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  padding: '14px 16px',
-                  borderRadius: '16px'
-                }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: '#16a34a',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 800,
-                    flexShrink: 0
-                  }}>
-                    3
-                  </div>
-                  <div style={{ fontSize: '0.92rem', color: '#15803d', lineHeight: '1.4' }}>
-                    Premi <strong>"Installa"</strong>: troverai l'icona Ramid subito tra le applicazioni del tuo smartphone come una vera app!
+                  <strong style={{ color: '#1e293b', fontSize: '0.92rem' }}>📲 Oppure installa senza scaricare file:</strong>
+                  <div style={{ fontSize: '0.84rem', color: '#475569', lineHeight: '1.4' }}>
+                    Tocca i <strong>3 puntini ⋮</strong> in alto a destra su Chrome e seleziona <strong>"Installa app"</strong> (o <em>"Aggiungi a schermata Home"</em>).
                   </div>
                 </div>
               </div>
