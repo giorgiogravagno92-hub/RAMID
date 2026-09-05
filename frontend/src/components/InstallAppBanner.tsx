@@ -10,6 +10,8 @@ export const InstallAppBanner: React.FC = () => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const [installedSuccess, setInstalledSuccess] = useState<boolean>(false);
 
+  const APK_DOWNLOAD_URL = 'https://github.com/giorgiogravagno92-hub/RAMID/releases/download/latest/ramid.apk';
+
   useEffect(() => {
     // 1. Check if running in standalone mode (already installed app)
     const checkStandalone = () => {
@@ -94,7 +96,7 @@ export const InstallAppBanner: React.FC = () => {
       try {
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
-        if (choice.outcome === 'accepted') {
+        if (choice && choice.outcome === 'accepted') {
           setShowBanner(false);
           setShowModal(false);
           setDeferredPrompt(null);
@@ -106,7 +108,7 @@ export const InstallAppBanner: React.FC = () => {
       }
     }
 
-    // If native prompt is not available (iOS, In-App browser, or Chrome without direct prompt), show platform guide modal
+    // Show guide modal with APK and PWA options
     setShowModal(true);
   };
 
@@ -196,7 +198,7 @@ export const InstallAppBanner: React.FC = () => {
                 </span>
               </div>
               <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#cbd5e1', lineHeight: '1.25' }}>
-                Installala sul tuo telefono per ricevere offerte istantanee!
+                {isAndroid ? "Scarica l'APK Android o installala subito sulla Home!" : "Installala sul tuo telefono per offerte in tempo reale!"}
               </p>
             </div>
             <button
@@ -241,7 +243,7 @@ export const InstallAppBanner: React.FC = () => {
                 boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)'
               }}
             >
-              <span>📲</span> Installa App Subito
+              <span>📲</span> {isAndroid ? "Scarica / Installa App" : "Installa App Subito"}
             </button>
             <button
               onClick={handleDismissBanner}
@@ -314,7 +316,7 @@ export const InstallAppBanner: React.FC = () => {
               ✕
             </button>
 
-            <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
               <img 
                 src="/icon-192.png" 
                 alt="Ramid" 
@@ -324,21 +326,21 @@ export const InstallAppBanner: React.FC = () => {
                 {isIOS 
                   ? "Come installare l'App su iPhone" 
                   : isAndroid 
-                    ? "Come installare l'App su Android" 
+                    ? "Scarica o Installa l'App Android" 
                     : "Installa l'App Ramid"}
               </h3>
               <p style={{ margin: '6px 0 0', fontSize: '0.88rem', color: '#64748b' }}>
                 {isAndroid 
-                  ? "Segui questi 2 passaggi facili per aggiungerla alla schermata principale:"
+                  ? "Scegli il metodo che preferisci per il tuo smartphone Android:"
                   : isIOS 
                     ? "Bastano 2 passaggi da Safari:" 
                     : "Installa l'applicazione sul tuo dispositivo per accedervi rapidamente:"}
               </p>
             </div>
 
-            {/* SEZIONE GUIDA ANDROID */}
+            {/* SEZIONE GUIDA ANDROID (APK + PWA) */}
             {isAndroid && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
                 {isInAppBrowser && (
                   <div style={{
                     background: '#fef3c7',
@@ -352,95 +354,91 @@ export const InstallAppBanner: React.FC = () => {
                     <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                     <div style={{ fontSize: '0.86rem', color: '#92400e', lineHeight: '1.35' }}>
                       <strong>Sei dentro un'app (WhatsApp/Facebook/Instagram):</strong><br />
-                      Tocca i <strong>3 puntini ⋮</strong> in alto a destra e seleziona <strong>"Apri nel browser"</strong> o <strong>"Apri in Chrome"</strong> per completare l'installazione.
+                      Tocca i <strong>3 puntini ⋮</strong> in alto a destra e seleziona <strong>"Apri nel browser"</strong> o <strong>"Apri in Chrome"</strong> per scaricare l'APK o installarla.
                     </div>
                   </div>
                 )}
 
+                {/* Opzione 1: Download Diretto APK */}
                 <div style={{
+                  border: '2px solid #0284c7',
+                  backgroundColor: '#f0f9ff',
+                  borderRadius: '16px',
+                  padding: '16px',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  padding: '14px 16px',
-                  borderRadius: '16px'
+                  flexDirection: 'column',
+                  gap: '10px'
                 }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: '#e0f2fe',
-                    color: '#0284c7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 800,
-                    flexShrink: 0
-                  }}>
-                    1
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.4rem' }}>🤖</span>
+                      <div>
+                        <strong style={{ color: '#0369a1', fontSize: '1rem' }}>Opzione 1: File APK Diretto</strong>
+                        <div style={{ fontSize: '0.78rem', color: '#0284c7' }}>App nativa Android completa (.apk)</div>
+                      </div>
+                    </div>
+                    <span style={{ 
+                      backgroundColor: '#0284c7', 
+                      color: '#ffffff', 
+                      fontSize: '0.65rem', 
+                      fontWeight: 800, 
+                      padding: '3px 8px', 
+                      borderRadius: '8px',
+                      textTransform: 'uppercase'
+                    }}>
+                      Consigliata
+                    </span>
                   </div>
-                  <div style={{ fontSize: '0.92rem', color: '#1e293b', lineHeight: '1.4' }}>
-                    Tocca i <strong>3 puntini di menu (⋮)</strong> in alto a destra nel browser Chrome (oppure l'icona ☰ in basso su Samsung Internet).
-                  </div>
+
+                  <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', lineHeight: '1.4' }}>
+                    Scarica il file <strong>ramid.apk</strong>, tocca il file completato nelle notifiche e premi <strong>"Installa"</strong>.
+                  </p>
+
+                  <a
+                    href={APK_DOWNLOAD_URL}
+                    download="ramid.apk"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '12px 16px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #3b82f6 100%)',
+                      color: '#ffffff',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      textDecoration: 'none',
+                      boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <span>📥</span> Scarica File APK per Android
+                  </a>
                 </div>
 
+                {/* Opzione 2: Installazione Diretta da Browser (PWA) */}
                 <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  background: '#f8fafc',
                   border: '1px solid #e2e8f0',
-                  padding: '14px 16px',
-                  borderRadius: '16px'
-                }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: '#ede9fe',
-                    color: '#8b5cf6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 800,
-                    flexShrink: 0
-                  }}>
-                    2
-                  </div>
-                  <div style={{ fontSize: '0.92rem', color: '#1e293b', lineHeight: '1.4' }}>
-                    Tocca <strong style={{ color: '#0284c7' }}>"Installa app"</strong> oppure <strong style={{ color: '#8b5cf6' }}>"Aggiungi a schermata Home" 📲</strong>.
-                  </div>
-                </div>
-
-                <div style={{
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '16px',
+                  padding: '16px',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  background: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  padding: '14px 16px',
-                  borderRadius: '16px'
+                  flexDirection: 'column',
+                  gap: '10px'
                 }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: '#dcfce7',
-                    color: '#16a34a',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 800,
-                    flexShrink: 0
-                  }}>
-                    3
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.4rem' }}>📲</span>
+                    <div>
+                      <strong style={{ color: '#1e293b', fontSize: '0.95rem' }}>Opzione 2: Aggiungi a Schermata Home</strong>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Senza scaricare file (tramite Chrome)</div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.92rem', color: '#15803d', lineHeight: '1.4' }}>
-                    Premi <strong>"Installa"</strong>: troverai l'icona Ramid subito tra le applicazioni del tuo smartphone!
+
+                  <div style={{ fontSize: '0.84rem', color: '#475569', lineHeight: '1.4' }}>
+                    1. Tocca i <strong>3 puntini ⋮</strong> in alto a destra su Chrome.<br />
+                    2. Seleziona <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong>.<br />
+                    3. Premi <strong>"Installa"</strong> per confermare.
                   </div>
                 </div>
               </div>
@@ -605,17 +603,16 @@ export const InstallAppBanner: React.FC = () => {
               style={{
                 width: '100%',
                 padding: '14px',
-                background: 'linear-gradient(135deg, #0284c7 0%, #3b82f6 100%)',
-                color: '#ffffff',
+                background: '#f1f5f9',
+                color: '#475569',
                 border: 'none',
                 borderRadius: '14px',
                 fontWeight: 700,
-                fontSize: '1rem',
-                cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)'
+                fontSize: '0.95rem',
+                cursor: 'pointer'
               }}
             >
-              Ho capito, grazie! 👍
+              Chiudi
             </button>
           </div>
         </div>

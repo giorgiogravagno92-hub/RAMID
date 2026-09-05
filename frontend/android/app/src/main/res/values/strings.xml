@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ramid</string>
+    <string name="title_activity_main">Ramid</string>
+    <string name="package_name">it.ramid.app</string>
+    <string name="custom_url_scheme">it.ramid.app</string>
+</resources>
