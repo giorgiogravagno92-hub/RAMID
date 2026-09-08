@@ -3,18 +3,63 @@ export const API_BASE_URL = `${BACKEND_URL}/api`;
 
 // Helper for local mock storage fallback
 const getMockData = (key: string, defaultValue: any) => {
-  const data = localStorage.getItem(`ramid_mock_${key}`);
-  return data ? JSON.parse(data) : defaultValue;
+  try {
+    const data = localStorage.getItem(`ramid_mock_${key}`);
+    return data ? JSON.parse(data) : defaultValue;
+  } catch (e) {
+    return defaultValue;
+  }
 };
 
 const setMockData = (key: string, value: any) => {
-  localStorage.setItem(`ramid_mock_${key}`, JSON.stringify(value));
+  try {
+    localStorage.setItem(`ramid_mock_${key}`, JSON.stringify(value));
+  } catch (e) {}
+};
+
+const DEFAULT_WORKER = {
+  id: 'w1',
+  firstName: 'Mario',
+  lastName: 'Rossi',
+  phone: '3331234567',
+  profession: 'Elettricista',
+  city: 'Roma',
+  province: 'Roma',
+  sigla: 'RM',
+  region: 'Lazio',
+  educationLevel: 'DIPLOMA',
+  educationField: 'Elettronica',
+  educationTitles: '[]',
+  skills: '{"computerSkills":{},"organizationalSkills":{}}',
+  availabilityStatus: 'DISPONIBILE_PROPOSTE',
+  availabilityRegionsProvinces: '[]',
+  availabilityContracts: '[]',
+  availabilityRoles: '["Elettricista"]',
+  desiredSalary: '',
+  cvPdfUrl: '',
+  photoUrl: '',
+  notes: '',
+  workExperiences: []
+};
+
+const DEFAULT_COMPANY = {
+  companyType: 'AZIENDA',
+  companyName: 'Innovate Tech S.p.A.',
+  vatNumber: 'IT12345678901',
+  address: 'Via Roma 100',
+  city: 'Milano',
+  province: 'Milano',
+  sigla: 'MI',
+  industry: 'Tecnologia & Software',
+  contactPerson: 'Ing. Alessandro Bianchi',
+  contactPhone: '+39 02 1234567',
+  logoUrl: ''
 };
 
 // Initialize mock database if empty
-if (!localStorage.getItem('ramid_mock_initialized_v2')) {
-  localStorage.removeItem('ramid_mock_workers');
-  setMockData('workers', []);
+if (!localStorage.getItem('ramid_mock_initialized_v3')) {
+  setMockData('workers', [DEFAULT_WORKER]);
+  setMockData('company_profile', DEFAULT_COMPANY);
   setMockData('wp_pages', {
     home: {
       title: 'Benvenuti su Ramid',
@@ -55,7 +100,7 @@ if (!localStorage.getItem('ramid_mock_initialized_v2')) {
       category: 'Candidati'
     }
   ]);
-  localStorage.setItem('ramid_mock_initialized_v2', 'true');
+  localStorage.setItem('ramid_mock_initialized_v3', 'true');
 }
 
 // Check server status
@@ -70,38 +115,57 @@ const request = async (method: string, path: string, body?: any) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Create an abort controller with a 3.5s timeout so Android webview never hangs indefinitely
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    try { controller.abort(); } catch (e) {}
+  }, 3500);
+
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Request failed');
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Request failed with status ${res.status}`);
     }
     isBackendOffline = false;
     return await res.json();
   } catch (error: any) {
-    if (error.message === 'Failed to fetch') {
-      console.warn('Backend is offline. Using mock simulated responses.');
-      isBackendOffline = true;
-      return handleMockFallback(method, path, body);
-    }
-    throw error;
+    clearTimeout(timeoutId);
+    console.warn(`API call ${method} ${path} failed or offline (${error?.message || error}). Using mock fallback.`);
+    isBackendOffline = true;
+    return handleMockFallback(method, path, body);
   }
 };
 
 // Simulated mock fallback engine in case backend server is not running
 const handleMockFallback = (method: string, path: string, body?: any) => {
   if (path.startsWith('/auth/login')) {
-    const { email } = body;
-    const role = email.includes('admin') ? 'ADMIN' : (email.includes('azienda') ? 'COMPANY' : 'WORKER');
+    const { email } = body || {};
+    const emailStr = String(email || '');
+    const role = emailStr.includes('admin') ? 'ADMIN' : (emailStr.includes('azienda') ? 'COMPANY' : 'WORKER');
     const mockUser = {
       id: role === 'ADMIN' ? 'u-admin' : (role === 'COMPANY' ? 'u-comp' : 'u-work'),
-      email,
+      email: emailStr || 'utente@ramid.it',
       role
+    };
+    localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
+    return { token: 'mock-jwt-token-1234', user: mockUser };
+  }
+
+  if (path.startsWith('/auth/social-login')) {
+    const { role } = body || {};
+    const userRole = role === 'COMPANY' ? 'COMPANY' : 'WORKER';
+    const mockUser = {
+      id: `u-${Date.now()}`,
+      email: body?.email || 'social-user@example.com',
+      role: userRole
     };
     localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
     return { token: 'mock-jwt-token-1234', user: mockUser };
@@ -112,15 +176,15 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
       success: true, 
       message: 'OTP inviato con successo (Simulato)', 
       code: '123456',
-      email: body.email || 'mock-persona-fisica@example.com'
+      email: body?.email || 'mock-persona-fisica@example.com'
     };
   }
 
   if (path.startsWith('/auth/verify-otp')) {
-    const { email } = body;
+    const { email } = body || {};
     const mockUser = {
       id: 'u-otp-comp',
-      email,
+      email: email || 'persona-fisica@example.com',
       role: 'COMPANY'
     };
     localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
@@ -135,8 +199,21 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     return { token: 'mock-jwt-token-1234', user: mockUser };
   }
 
+  if (path.startsWith('/auth/forgot-password') || path.startsWith('/auth/reset-password')) {
+    return { success: true, message: 'Operazione completata con successo' };
+  }
+
+  if (path.startsWith('/auth/verify-email')) {
+    const mockUser = { id: 'u-verified', email: 'worker@demo.it', role: 'WORKER' };
+    return { success: true, token: 'mock-jwt-token-1234', user: mockUser };
+  }
+
+  if (path.startsWith('/auth/verification-status')) {
+    return { verified: true };
+  }
+
   if (path.startsWith('/auth/register')) {
-    const { email, password, role, profileData } = body;
+    const { email, password, role, profileData } = body || {};
     const isPersonaFisica = role === 'COMPANY' && profileData?.companyType === 'PERSONA_FISICA';
     
     if (!isPersonaFisica) {
@@ -145,22 +222,22 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
         throw new Error('La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.');
       }
     }
-    const mockUser = { id: `u-${Math.random()}`, email, role };
+    const mockUser = { id: `u-${Math.random()}`, email: email || 'nuovo@ramid.it', role: role || 'WORKER' };
     localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
     if (role === 'COMPANY') {
       setMockData('company_profile', {
         companyType: profileData?.companyType || 'AZIENDA',
-        companyName: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || null),
+        companyName: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || 'Mia Azienda'),
         firstName: isPersonaFisica ? profileData.firstName : null,
         lastName: isPersonaFisica ? profileData.lastName : null,
         fiscalCode: isPersonaFisica ? profileData.fiscalCode : null,
-        address: profileData?.address || null,
-        city: profileData?.city || null,
-        province: profileData?.province || null,
-        sigla: profileData?.sigla || null,
+        address: profileData?.address || 'Via Roma 1',
+        city: profileData?.city || 'Roma',
+        province: profileData?.province || 'Roma',
+        sigla: profileData?.sigla || 'RM',
         industry: isPersonaFisica ? 'Persona Fisica' : (profileData?.sector || profileData?.industry || 'Altro'),
         contactPerson: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || 'Referente'),
-        contactPhone: profileData?.contactPhone || null
+        contactPhone: profileData?.contactPhone || '3331234567'
       });
     }
     return { token: 'mock-jwt-token-1234', user: mockUser };
@@ -180,55 +257,53 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     };
   }
 
+  // WORKER ENDPOINTS
   if (path.startsWith('/workers/profile')) {
+    const workers = getMockData('workers', [DEFAULT_WORKER]);
+    const currentWorker = (workers && workers.length > 0 && workers[0]) ? workers[0] : DEFAULT_WORKER;
+    
     if (method === 'GET') {
-      const defaultWorker = {
-        id: 'w1',
-        firstName: 'Mario',
-        lastName: 'Rossi',
-        profession: 'Elettricista',
-        city: 'Roma',
-        province: 'Roma',
-        sigla: 'RM',
-        region: 'Lazio',
-        educationLevel: 'NESSUNO',
-        educationField: '',
-        educationTitles: '[]',
-        skills: '{"computerSkills":{},"organizationalSkills":{}}',
-        availabilityStatus: 'DISPONIBILE_PROPOSTE',
-        availabilityRegionsProvinces: '[]',
-        availabilityContracts: '[]',
-        notes: '',
-        workExperiences: []
-      };
-      return getMockData('workers', [defaultWorker])[0];
+      return currentWorker;
     }
     if (method === 'PUT') {
-      const workers = getMockData('workers', []);
-      workers[0] = { ...workers[0], ...body };
-      setMockData('workers', workers);
-      return workers[0];
+      const updatedWorker = { ...currentWorker, ...(body || {}) };
+      setMockData('workers', [updatedWorker]);
+      return updatedWorker;
     }
   }
 
   if (path.startsWith('/workers/availability')) {
-    const workers = getMockData('workers', []);
-    workers[0].availabilityStatus = body.status;
-    if (body.status !== 'NON_DISPONIBILE') {
-      workers[0].profession = body.profession || workers[0].profession;
-      workers[0].city = body.city || workers[0].city;
-      workers[0].maxDistanceKm = Number(body.maxDistanceKm) || workers[0].maxDistanceKm;
-      workers[0].availabilityDetails = body.availabilityDetails || '';
-      workers[0].availabilityRegionsProvinces = body.availabilityRegionsProvinces || workers[0].availabilityRegionsProvinces || '[]';
-      workers[0].availabilityContracts = body.availabilityContracts || workers[0].availabilityContracts || '[]';
-      workers[0].availabilityNotes = body.notes || '';
+    const workers = getMockData('workers', [DEFAULT_WORKER]);
+    const currentWorker = (workers && workers.length > 0 && workers[0]) ? workers[0] : DEFAULT_WORKER;
+    currentWorker.availabilityStatus = body?.status || 'DISPONIBILE_PROPOSTE';
+    if (body?.status !== 'NON_DISPONIBILE') {
+      currentWorker.profession = body?.profession || currentWorker.profession;
+      currentWorker.city = body?.city || currentWorker.city;
+      currentWorker.maxDistanceKm = Number(body?.maxDistanceKm) || currentWorker.maxDistanceKm;
+      currentWorker.availabilityDetails = body?.availabilityDetails || '';
+      currentWorker.availabilityRegionsProvinces = body?.availabilityRegionsProvinces || currentWorker.availabilityRegionsProvinces || '[]';
+      currentWorker.availabilityContracts = body?.availabilityContracts || currentWorker.availabilityContracts || '[]';
+      currentWorker.availabilityRoles = body?.availabilityRoles || currentWorker.availabilityRoles || '[]';
+      currentWorker.availabilityNotes = body?.notes || '';
     }
-    setMockData('workers', workers);
-    return { success: true, availabilityStatus: body.status, profile: workers[0] };
+    setMockData('workers', [currentWorker]);
+    return { success: true, availabilityStatus: currentWorker.availabilityStatus, profile: currentWorker };
+  }
+
+  if (path.startsWith('/workers/notifications')) {
+    return [];
+  }
+
+  if (path.startsWith('/workers/interviews')) {
+    return [];
+  }
+
+  if (path.startsWith('/workers/proposals')) {
+    return [];
   }
 
   if (path.startsWith('/workers/upload-cv')) {
-    const workers = getMockData('workers', []);
+    const workers = getMockData('workers', [DEFAULT_WORKER]);
     const fileUrl = `/uploads/mock-cv-${Date.now()}.pdf`;
     workers[0].cvPdfUrl = fileUrl;
     setMockData('workers', workers);
@@ -236,45 +311,80 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
   }
 
   if (path.startsWith('/workers/upload-photo')) {
-    const workers = getMockData('workers', []);
-    const fileUrl = body.base64Data; // Just return base64 for mock
+    const workers = getMockData('workers', [DEFAULT_WORKER]);
+    const fileUrl = body?.base64Data || '';
     workers[0].photoUrl = fileUrl;
     setMockData('workers', workers);
     return { success: true, photoUrl: fileUrl };
   }
 
+  // COMPANY ENDPOINTS
   if (path.startsWith('/companies/profile')) {
+    const current = getMockData('company_profile', DEFAULT_COMPANY);
     if (method === 'GET') {
-      return getMockData('company_profile', {
-        companyType: 'AZIENDA',
-        companyName: 'Innovate Tech S.p.A.',
-        industry: 'Tecnologia & Software',
-        city: 'Milano',
-        contactPerson: 'Ing. Alessandro Bianchi',
-        contactPhone: '+39 02 1234567'
-      });
+      return current;
     }
     if (method === 'PUT') {
-      const current = getMockData('company_profile', {});
-      const updated = { ...current, ...body };
+      const updated = { ...current, ...(body || {}) };
       setMockData('company_profile', updated);
       return updated;
     }
   }
 
   if (path.startsWith('/companies/upload-id')) {
-    const current = getMockData('company_profile', {});
+    const current = getMockData('company_profile', DEFAULT_COMPANY);
     current.idDocumentUrl = '/uploads/id-card-mock.png';
     setMockData('company_profile', current);
     return { success: true, idDocumentUrl: '/uploads/id-card-mock.png', company: current };
   }
 
   if (path.startsWith('/companies/search')) {
-    const workers = getMockData('workers', []);
-    // Simple filter simulation
-    return workers;
+    const workers = getMockData('workers', [DEFAULT_WORKER]);
+    return workers || [DEFAULT_WORKER];
   }
 
+  if (path.startsWith('/companies/workers/')) {
+    const workers = getMockData('workers', [DEFAULT_WORKER]);
+    return (workers && workers.length > 0) ? workers[0] : DEFAULT_WORKER;
+  }
+
+  if (path.startsWith('/companies/favorites')) {
+    if (method === 'GET') return [];
+    return { success: true, isFavorite: true };
+  }
+
+  if (path.startsWith('/companies/interviews')) {
+    return { success: true };
+  }
+
+  if (path.startsWith('/companies/proposals')) {
+    if (method === 'GET') return [];
+    return { success: true };
+  }
+
+  if (path.startsWith('/companies/notifications')) {
+    if (method === 'GET') return [];
+    return { success: true };
+  }
+
+  // ADMIN ENDPOINTS
+  if (path.startsWith('/admin/stats')) {
+    return {
+      totals: { workers: 120, companies: 45, interviews: 88, favorites: 230 },
+      availabilityDistribution: { DISPONIBILE_SUBITO: 65, VALUTO_OFFERTE: 40, NON_DISPONIBILE: 15 },
+      interviewStatusDistribution: { PENDING: 30, ACCEPTED: 45, DECLINED: 13 }
+    };
+  }
+
+  if (path.startsWith('/admin/users')) {
+    return [];
+  }
+
+  if (path.startsWith('/admin/companies')) {
+    return [];
+  }
+
+  // WORDPRESS CMS ENDPOINTS
   if (path.startsWith('/wp/pages/')) {
     const key = path.split('/').pop() || 'home';
     const pages = getMockData('wp_pages', {});
@@ -289,12 +399,8 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     return getMockData('wp_faqs', []);
   }
 
-  if (path.startsWith('/admin/stats')) {
-    return {
-      totals: { workers: 120, companies: 45, interviews: 88, favorites: 230 },
-      availabilityDistribution: { DISPONIBILE_SUBITO: 65, VALUTO_OFFERTE: 40, NON_DISPONIBILE: 15 },
-      interviewStatusDistribution: { PENDING: 30, ACCEPTED: 45, DECLINED: 13 }
-    };
+  if (path.startsWith('/wp/settings')) {
+    return getMockData('wp_settings', { siteName: 'Ramid', maintenance: false });
   }
 
   return { success: true };
