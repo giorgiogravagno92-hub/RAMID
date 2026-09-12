@@ -17,90 +17,31 @@ const setMockData = (key: string, value: any) => {
   } catch (e) {}
 };
 
-const DEFAULT_WORKER = {
-  id: 'w1',
-  firstName: 'Mario',
-  lastName: 'Rossi',
-  phone: '3331234567',
-  profession: 'Elettricista',
-  city: 'Roma',
-  province: 'Roma',
-  sigla: 'RM',
-  region: 'Lazio',
-  educationLevel: 'DIPLOMA',
-  educationField: 'Elettronica',
-  educationTitles: '[]',
-  skills: '{"computerSkills":{},"organizationalSkills":{}}',
-  availabilityStatus: 'DISPONIBILE_PROPOSTE',
-  availabilityRegionsProvinces: '[]',
-  availabilityContracts: '[]',
-  availabilityRoles: '["Elettricista"]',
-  desiredSalary: '',
-  cvPdfUrl: '',
-  photoUrl: '',
-  notes: '',
-  workExperiences: []
-};
-
-const DEFAULT_COMPANY = {
-  companyType: 'AZIENDA',
-  companyName: 'Innovate Tech S.p.A.',
-  vatNumber: 'IT12345678901',
-  address: 'Via Roma 100',
-  city: 'Milano',
-  province: 'Milano',
-  sigla: 'MI',
-  industry: 'Tecnologia & Software',
-  contactPerson: 'Ing. Alessandro Bianchi',
-  contactPhone: '+39 02 1234567',
-  logoUrl: ''
-};
-
-// Initialize mock database if empty
-if (!localStorage.getItem('ramid_mock_initialized_v3')) {
-  setMockData('workers', [DEFAULT_WORKER]);
-  setMockData('company_profile', DEFAULT_COMPANY);
-  setMockData('wp_pages', {
-    home: {
-      title: 'Benvenuti su Ramid',
-      content: 'La piattaforma rivoluzionaria dove le aziende cercano direttamente te. Inserisci la tua disponibilità, compila il tuo CV strutturato in 2 minuti e lasciati trovare dai migliori datori di lavoro della tua zona.',
-      seoTitle: 'Ramid - Trova Lavoro Subito, Fatti Cercare dalle Aziende',
-      seoDescription: 'Non perdere tempo con candidature a vuoto. Su Ramid inserisci il tuo profilo e sono le aziende a contattarti per colloqui diretti.'
-    },
-    about: {
-      title: 'Chi Siamo',
-      content: 'Ramid nasce nel 2026 dall\'esigenza di semplificare l\'incontro tra domanda e offerta di lavoro. Crediamo che il modello tradicional degli annunci sia obsoleto. Vogliamo dare centralità al lavoratore e alla sua disponibilità immediata, riducendo i tempi di selezione per le aziende da settimane a poche ore.',
-      seoTitle: 'Chi Siamo - La Nostra Missione | Ramid',
-      seoDescription: 'La storia e la missione dietro Ramid. Cambiamo il modo in cui cerchi lavoro e personale.'
-    },
-    privacy: {
-      title: 'Privacy & Cookie Policy',
-      content: 'In conformità con il GDPR (UE 2016/679), raccogliamo e trattiamo i tuoi dati esclusivamente per erogare il servizio di intermediazione lavorativa. I tuoi dati personali, inclusi CV e contatti, saranno visibili solo alle aziende registrate e verificate sulla piattaforma.',
-      seoTitle: 'Privacy Policy e Trattamento Dati - Ramid',
-      seoDescription: 'Informative chiare sul trattamento dei tuoi dati personali, cookie policy e diritti degli utenti.'
-    }
-  });
-  setMockData('wp_posts', [
-    {
-      id: 1,
-      title: 'Come ottimizzare il tuo profilo per essere assunto subito',
-      slug: 'ottimizzare-profilo-assunzione-veloce',
-      excerpt: 'I 5 errori da evitare nella compilazione del tuo CV digitale e come scrivere le competenze chiave.',
-      content: 'Nel mercato attuale, la velocità è tutto. Le aziende che cercano su Ramid vogliono sapere immediatamente cosa sai fare e quando sei disponibile...',
-      date: '2026-07-10T09:30:00Z',
-      author: 'Redazione Ramid',
-      imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&auto=format&fit=crop&q=60'
-    }
-  ]);
-  setMockData('wp_faqs', [
-    {
-      id: 1,
-      question: 'Come funziona il sistema di disponibilità?',
-      answer: 'Su Ramid puoi impostare il tuo stato su: "Disponibile subito" (se sei pronto a lavorare da oggi), "Valuto offerte" (se hai già un lavoro ma sei aperto ad altro) o "Non disponibile".',
-      category: 'Candidati'
-    }
-  ]);
-  localStorage.setItem('ramid_mock_initialized_v3', 'true');
+// Automatic one-time cleanup of all legacy mock accounts and stale tokens
+if (!localStorage.getItem('ramid_db_cleaned_v6')) {
+  try {
+    const keysToRemove = [
+      'ramid_mock_workers',
+      'ramid_mock_company_profile',
+      'ramid_mock_proposals',
+      'ramid_mock_favorites',
+      'ramid_mock_interviews',
+      'ramid_mock_notifications',
+      'ramid_mock_initialized',
+      'ramid_mock_initialized_v2',
+      'ramid_mock_initialized_v3',
+      'ramid_token',
+      'ramid_last_otp'
+    ];
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    setMockData('workers', []);
+    setMockData('company_profile', null);
+    setMockData('proposals', []);
+    setMockData('favorites', []);
+    setMockData('interviews', []);
+    setMockData('notifications', []);
+    localStorage.setItem('ramid_db_cleaned_v6', 'true');
+  } catch (e) {}
 }
 
 // Check server status
@@ -147,11 +88,11 @@ const request = async (method: string, path: string, body?: any) => {
 // Simulated mock fallback engine in case backend server is not running
 const handleMockFallback = (method: string, path: string, body?: any) => {
   if (path.startsWith('/auth/login')) {
-    const { email } = body || {};
-    const emailStr = String(email || '');
-    const role = emailStr.includes('admin') ? 'ADMIN' : (emailStr.includes('azienda') ? 'COMPANY' : 'WORKER');
+    const { email, vatNumber } = body || {};
+    const emailStr = String(email || vatNumber || '');
+    const role = emailStr.includes('admin') ? 'ADMIN' : (emailStr.includes('IT') || emailStr.includes('pec') ? 'COMPANY' : 'WORKER');
     const mockUser = {
-      id: role === 'ADMIN' ? 'u-admin' : (role === 'COMPANY' ? 'u-comp' : 'u-work'),
+      id: `u-${Date.now()}`,
       email: emailStr || 'utente@ramid.it',
       role
     };
@@ -171,42 +112,6 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     return { token: 'mock-jwt-token-1234', user: mockUser };
   }
 
-  if (path.startsWith('/auth/send-otp')) {
-    const { email, phone, channel } = body || {};
-    const isWhatsApp = channel === 'whatsapp' || (!email && !!phone);
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    localStorage.setItem('ramid_last_otp', code);
-    return { 
-      success: true, 
-      channel: isWhatsApp ? 'whatsapp' : 'email',
-      message: isWhatsApp 
-        ? `Codice OTP inviato su WhatsApp al numero ${phone || '+39 333 1234567'}` 
-        : `Codice OTP inviato all'indirizzo email ${email || 'utente@ramid.it'}`, 
-      code,
-      email: email || 'persona-fisica@example.com',
-      phone: phone || '3331234567'
-    };
-  }
-
-  if (path.startsWith('/auth/verify-otp')) {
-    const { email, phone } = body || {};
-    const mockUser = {
-      id: 'u-otp-comp',
-      email: email || 'persona-fisica@example.com',
-      role: 'COMPANY'
-    };
-    localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
-    setMockData('company_profile', {
-      companyType: 'PERSONA_FISICA',
-      companyName: 'Persona Fisica Recruiter',
-      firstName: 'Recruiter',
-      lastName: 'Fisico',
-      contactPhone: phone || '3331234567',
-      industry: 'Persona Fisica'
-    });
-    return { token: 'mock-jwt-token-1234', user: mockUser };
-  }
-
   if (path.startsWith('/auth/forgot-password') || path.startsWith('/auth/reset-password')) {
     return { success: true, message: 'Operazione completata con successo' };
   }
@@ -222,31 +127,53 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
 
   if (path.startsWith('/auth/register')) {
     const { email, password, role, profileData } = body || {};
-    const isPersonaFisica = role === 'COMPANY' && profileData?.companyType === 'PERSONA_FISICA';
-    
-    if (!isPersonaFisica) {
-      const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-      if (password && !passwordRegex.test(password)) {
-        throw new Error('La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.');
-      }
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (password && !passwordRegex.test(password)) {
+      throw new Error('La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.');
     }
-    const mockUser = { id: `u-${Math.random()}`, email: email || 'nuovo@ramid.it', role: role || 'WORKER' };
+    const mockUser = { id: `u-${Date.now()}`, email: email || 'nuovo@ramid.it', role: role || 'WORKER' };
     localStorage.setItem('ramid_token', 'mock-jwt-token-1234');
     if (role === 'COMPANY') {
-      setMockData('company_profile', {
-        companyType: profileData?.companyType || 'AZIENDA',
-        companyName: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || 'Mia Azienda'),
-        firstName: isPersonaFisica ? profileData.firstName : null,
-        lastName: isPersonaFisica ? profileData.lastName : null,
-        fiscalCode: isPersonaFisica ? profileData.fiscalCode : null,
-        address: profileData?.address || 'Via Roma 1',
-        city: profileData?.city || 'Roma',
-        province: profileData?.province || 'Roma',
-        sigla: profileData?.sigla || 'RM',
-        industry: isPersonaFisica ? 'Persona Fisica' : (profileData?.sector || profileData?.industry || 'Altro'),
-        contactPerson: isPersonaFisica ? `${profileData.firstName} ${profileData.lastName}` : (profileData?.companyName || 'Referente'),
-        contactPhone: profileData?.contactPhone || '3331234567'
-      });
+      const companyObj = {
+        companyType: 'AZIENDA',
+        companyName: profileData?.companyName || 'Azienda Registrata',
+        vatNumber: profileData?.vatNumber || 'IT12345678901',
+        address: profileData?.address || '',
+        city: profileData?.city || '',
+        province: profileData?.province || '',
+        sigla: profileData?.sigla || '',
+        industry: profileData?.industry || '',
+        contactPerson: profileData?.companyName || 'Referente',
+        contactPhone: profileData?.contactPhone || ''
+      };
+      setMockData('company_profile', companyObj);
+    } else if (role === 'WORKER') {
+      const workerObj = {
+        id: `w-${Date.now()}`,
+        firstName: profileData?.firstName || 'Candidato',
+        lastName: profileData?.lastName || 'Registrato',
+        phone: '',
+        profession: '',
+        city: '',
+        province: '',
+        sigla: '',
+        region: '',
+        educationLevel: 'NESSUNO',
+        educationField: '',
+        educationTitles: '[]',
+        skills: '{"computerSkills":{},"organizationalSkills":{}}',
+        availabilityStatus: 'NON_DISPONIBILE',
+        availabilityRegionsProvinces: '[]',
+        availabilityContracts: '[]',
+        availabilityRoles: '[]',
+        desiredSalary: '',
+        cvPdfUrl: '',
+        photoUrl: '',
+        notes: '',
+        workExperiences: []
+      };
+      const currentWorkers = getMockData('workers', []);
+      setMockData('workers', [...currentWorkers, workerObj]);
     }
     return { token: 'mock-jwt-token-1234', user: mockUser };
   }
@@ -255,20 +182,39 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     const token = localStorage.getItem('ramid_token');
     if (!token) throw new Error('Unauthorized');
     return { 
-      id: 'u-work', 
-      email: 'worker@demo.it', 
-      role: 'WORKER',
-      profile: {
-        firstName: 'Mario',
-        lastName: 'Rossi'
-      }
+      id: 'u-current', 
+      email: 'utente@ramid.it', 
+      role: 'COMPANY'
     };
   }
 
   // WORKER ENDPOINTS
   if (path.startsWith('/workers/profile')) {
-    const workers = getMockData('workers', [DEFAULT_WORKER]);
-    const currentWorker = (workers && workers.length > 0 && workers[0]) ? workers[0] : DEFAULT_WORKER;
+    const workers = getMockData('workers', []);
+    const currentWorker = (workers && workers.length > 0) ? workers[0] : {
+      id: 'w-new',
+      firstName: '',
+      lastName: '',
+      phone: '',
+      profession: '',
+      city: '',
+      province: '',
+      sigla: '',
+      region: '',
+      educationLevel: 'NESSUNO',
+      educationField: '',
+      educationTitles: '[]',
+      skills: '{"computerSkills":{},"organizationalSkills":{}}',
+      availabilityStatus: 'NON_DISPONIBILE',
+      availabilityRegionsProvinces: '[]',
+      availabilityContracts: '[]',
+      availabilityRoles: '[]',
+      desiredSalary: '',
+      cvPdfUrl: '',
+      photoUrl: '',
+      notes: '',
+      workExperiences: []
+    };
     
     if (method === 'GET') {
       return currentWorker;
@@ -281,8 +227,8 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
   }
 
   if (path.startsWith('/workers/availability')) {
-    const workers = getMockData('workers', [DEFAULT_WORKER]);
-    const currentWorker = (workers && workers.length > 0 && workers[0]) ? workers[0] : DEFAULT_WORKER;
+    const workers = getMockData('workers', []);
+    const currentWorker = (workers && workers.length > 0) ? workers[0] : { availabilityStatus: 'NON_DISPONIBILE' };
     currentWorker.availabilityStatus = body?.status || 'DISPONIBILE_PROPOSTE';
     if (body?.status !== 'NON_DISPONIBILE') {
       currentWorker.profession = body?.profession || currentWorker.profession;
@@ -311,24 +257,40 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
   }
 
   if (path.startsWith('/workers/upload-cv')) {
-    const workers = getMockData('workers', [DEFAULT_WORKER]);
-    const fileUrl = `/uploads/mock-cv-${Date.now()}.pdf`;
-    workers[0].cvPdfUrl = fileUrl;
-    setMockData('workers', workers);
+    const workers = getMockData('workers', []);
+    const fileUrl = `/uploads/cv-${Date.now()}.pdf`;
+    if (workers.length > 0) {
+      workers[0].cvPdfUrl = fileUrl;
+      setMockData('workers', workers);
+    }
     return { success: true, cvPdfUrl: fileUrl };
   }
 
   if (path.startsWith('/workers/upload-photo')) {
-    const workers = getMockData('workers', [DEFAULT_WORKER]);
+    const workers = getMockData('workers', []);
     const fileUrl = body?.base64Data || '';
-    workers[0].photoUrl = fileUrl;
-    setMockData('workers', workers);
+    if (workers.length > 0) {
+      workers[0].photoUrl = fileUrl;
+      setMockData('workers', workers);
+    }
     return { success: true, photoUrl: fileUrl };
   }
 
   // COMPANY ENDPOINTS
   if (path.startsWith('/companies/profile')) {
-    const current = getMockData('company_profile', DEFAULT_COMPANY);
+    const current = getMockData('company_profile', {
+      companyType: 'AZIENDA',
+      companyName: '',
+      vatNumber: '',
+      address: '',
+      city: '',
+      province: '',
+      sigla: '',
+      industry: '',
+      contactPerson: '',
+      contactPhone: '',
+      logoUrl: ''
+    });
     if (method === 'GET') {
       return current;
     }
@@ -339,21 +301,14 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
     }
   }
 
-  if (path.startsWith('/companies/upload-id')) {
-    const current = getMockData('company_profile', DEFAULT_COMPANY);
-    current.idDocumentUrl = '/uploads/id-card-mock.png';
-    setMockData('company_profile', current);
-    return { success: true, idDocumentUrl: '/uploads/id-card-mock.png', company: current };
-  }
-
   if (path.startsWith('/companies/search')) {
-    const workers = getMockData('workers', [DEFAULT_WORKER]);
-    return workers || [DEFAULT_WORKER];
+    const workers = getMockData('workers', []);
+    return workers || [];
   }
 
   if (path.startsWith('/companies/workers/')) {
-    const workers = getMockData('workers', [DEFAULT_WORKER]);
-    return (workers && workers.length > 0) ? workers[0] : DEFAULT_WORKER;
+    const workers = getMockData('workers', []);
+    return (workers && workers.length > 0) ? workers[0] : null;
   }
 
   if (path.startsWith('/companies/favorites')) {
@@ -378,9 +333,9 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
   // ADMIN ENDPOINTS
   if (path.startsWith('/admin/stats')) {
     return {
-      totals: { workers: 120, companies: 45, interviews: 88, favorites: 230 },
-      availabilityDistribution: { DISPONIBILE_SUBITO: 65, VALUTO_OFFERTE: 40, NON_DISPONIBILE: 15 },
-      interviewStatusDistribution: { PENDING: 30, ACCEPTED: 45, DECLINED: 13 }
+      totals: { workers: 0, companies: 0, interviews: 0, favorites: 0 },
+      availabilityDistribution: { DISPONIBILE_SUBITO: 0, VALUTO_OFFERTE: 0, NON_DISPONIBILE: 0 },
+      interviewStatusDistribution: { PENDING: 0, ACCEPTED: 0, DECLINED: 0 }
     };
   }
 
