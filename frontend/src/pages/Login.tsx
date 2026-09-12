@@ -735,53 +735,8 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                     </>
                   ) : (
                     <>
-                      {/* Channel Selector for Registration */}
-                      <div>
-                        <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Canale di ricezione codice OTP:</label>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            type="button"
-                            onClick={() => setOtpChannel('whatsapp')}
-                            style={{
-                              flex: 1,
-                              padding: '8px 10px',
-                              borderRadius: '8px',
-                              border: otpChannel === 'whatsapp' ? '2px solid #25D366' : '1px solid #cbd5e1',
-                              background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : '#ffffff',
-                              color: otpChannel === 'whatsapp' ? '#128C7E' : '#475569',
-                              fontWeight: 700,
-                              fontSize: '0.82rem',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <span style={{ fontSize: '1rem' }}>💬</span> WhatsApp (Gratis)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setOtpChannel('email')}
-                            style={{
-                              flex: 1,
-                              padding: '8px 10px',
-                              borderRadius: '8px',
-                              border: otpChannel === 'email' ? '2px solid var(--accent-blue)' : '1px solid #cbd5e1',
-                              background: otpChannel === 'email' ? 'rgba(59, 130, 246, 0.12)' : '#ffffff',
-                              color: otpChannel === 'email' ? 'var(--accent-blue)' : '#475569',
-                              fontWeight: 700,
-                              fontSize: '0.82rem',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <span>📧</span> Email
-                          </button>
-                        </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(37,211,102,0.08)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(37,211,102,0.25)' }}>
+                        🟢 <strong>Registrazione Persona Fisica</strong>: Inserisci la tua email personale ordinaria (es. Gmail, Libero, Hotmail) e il tuo cellulare. <strong>Nessuna PEC richiesta</strong>: la verifica dell'identità avviene direttamente sul tuo cellulare tramite WhatsApp!
                       </div>
 
                       <div className="form-control-row" style={{ marginBottom: 0 }}>
@@ -806,17 +761,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                           />
                         </div>
                       </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Indirizzo Email *</label>
-                        <input 
-                          type="email" 
-                          className="form-control" 
-                          value={email} 
-                          onChange={(e) => setEmail(e.target.value)} 
-                          placeholder="es. nome@email.it"
-                          required 
-                        />
-                      </div>
+
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Codice Fiscale *</label>
                         <input 
@@ -828,8 +773,27 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                           required 
                         />
                       </div>
+
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Numero di Telefono (Cellulare WhatsApp) *</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>Indirizzo Email Ordinaria *</label>
+                          <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700 }}>Nessun vincolo PEC</span>
+                        </div>
+                        <input 
+                          type="email" 
+                          className="form-control" 
+                          value={email} 
+                          onChange={(e) => setEmail(e.target.value)} 
+                          placeholder="es. nome.cognome@gmail.com"
+                          required 
+                        />
+                        <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          ✉️ Puoi usare qualsiasi email (Gmail, Libero, Outlook, Yahoo...).
+                        </span>
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Numero di Cellulare (Verifica WhatsApp) *</label>
                         <input 
                           type="tel" 
                           className="form-control" 
@@ -838,6 +802,9 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                           placeholder="es. +39 333 1234567"
                           required 
                         />
+                        <span style={{ display: 'block', fontSize: '0.73rem', color: '#128C7E', fontWeight: 600, marginTop: '4px' }}>
+                          📲 Riceverai il codice di verifica a 6 cifre direttamente su WhatsApp su questo numero.
+                        </span>
                       </div>
                     </>
                   )}
