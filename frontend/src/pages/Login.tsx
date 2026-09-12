@@ -553,31 +553,81 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
               {isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && showOtpScreen && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
                   <div style={{
-                    background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-                    border: otpChannel === 'whatsapp' ? '1px solid rgba(37, 211, 102, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)',
+                    background: 'rgba(37, 211, 102, 0.12)',
+                    border: '1px solid rgba(37, 211, 102, 0.3)',
                     borderRadius: '12px',
-                    padding: '12px 14px',
+                    padding: '14px',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px'
+                    flexDirection: 'column',
+                    gap: '10px'
                   }}>
-                    <span style={{ fontSize: '1.6rem' }}>{otpChannel === 'whatsapp' ? '💬' : '📧'}</span>
-                    <div style={{ fontSize: '0.84rem', color: '#1e293b', lineHeight: '1.4' }}>
-                      Codice OTP inviato {otpChannel === 'whatsapp' ? 'su WhatsApp al numero' : 'all\'email'}:<br />
-                      <strong style={{ color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)', fontSize: '0.94rem' }}>
-                        {otpChannel === 'whatsapp' ? phone : (otpSentEmail || email)}
-                      </strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.6rem' }}>💬</span>
+                      <div style={{ fontSize: '0.86rem', color: '#1e293b', lineHeight: '1.4' }}>
+                        Verifica WhatsApp per il numero:<br />
+                        <strong style={{ color: '#128C7E', fontSize: '1rem' }}>{phone}</strong>
+                      </div>
                     </div>
+
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(`*RAMID - Verifica Persona Fisica*\n\n👤 Nome: ${firstName} ${lastName}\n📄 CF: ${fiscalCode}\n🔑 Codice di Verifica: *${otpSentCode}*\n\nRichiedo la verifica e l'accesso su RAMID.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: '#25D366',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        textDecoration: 'none',
+                        boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
+                        marginTop: '4px'
+                      }}
+                    >
+                      <span>💬</span> Apri WhatsApp per Inviare il Messaggio
+                    </a>
                   </div>
 
                   {otpSentCode && (
-                    <div style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-purple)', padding: '10px', borderRadius: '8px', fontSize: '0.78rem', border: '1px solid rgba(139,92,246,0.2)' }}>
-                      🔑 Codice OTP di test: <strong>{otpSentCode}</strong>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: 'rgba(37, 211, 102, 0.08)',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(37, 211, 102, 0.25)'
+                    }}>
+                      <div style={{ fontSize: '0.84rem', color: '#1e293b' }}>
+                        Codice OTP: <strong style={{ fontSize: '1.05rem', color: '#128C7E', letterSpacing: '2px' }}>{otpSentCode}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOtpCode(otpSentCode)}
+                        style={{
+                          background: '#128C7E',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ⚡ Inserisci
+                      </button>
                     </div>
                   )}
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontWeight: 700 }}>Inserisci il codice a 6 cifre *</label>
+                    <label className="form-label" style={{ fontWeight: 700 }}>Codice di Verifica a 6 cifre *</label>
                     <input 
                       type="text" 
                       className="form-control" 
@@ -613,7 +663,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
 
                     {resendTimer > 0 ? (
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        Reinvia tra <strong>{resendTimer}s</strong>
+                        Nuovo codice tra <strong>{resendTimer}s</strong>
                       </span>
                     ) : (
                       <button
@@ -628,13 +678,13 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)',
+                          color: '#128C7E',
                           fontWeight: 700,
                           fontSize: '0.8rem',
                           cursor: 'pointer'
                         }}
                       >
-                        🔄 Reinvia codice
+                        🔄 Rigenera codice
                       </button>
                     )}
                   </div>
@@ -647,31 +697,81 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                   {showOtpScreen ? (
                     <>
                       <div style={{
-                        background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-                        border: otpChannel === 'whatsapp' ? '1px solid rgba(37, 211, 102, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)',
+                        background: 'rgba(37, 211, 102, 0.12)',
+                        border: '1px solid rgba(37, 211, 102, 0.3)',
                         borderRadius: '12px',
-                        padding: '12px 14px',
+                        padding: '14px',
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px'
+                        flexDirection: 'column',
+                        gap: '10px'
                       }}>
-                        <span style={{ fontSize: '1.6rem' }}>{otpChannel === 'whatsapp' ? '💬' : '📧'}</span>
-                        <div style={{ fontSize: '0.84rem', color: '#1e293b', lineHeight: '1.4' }}>
-                          Codice OTP inviato {otpChannel === 'whatsapp' ? 'su WhatsApp al numero' : 'all\'indirizzo email'}:<br />
-                          <strong style={{ color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)', fontSize: '0.94rem' }}>
-                            {otpChannel === 'whatsapp' ? phone : email}
-                          </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '1.6rem' }}>💬</span>
+                          <div style={{ fontSize: '0.86rem', color: '#1e293b', lineHeight: '1.4' }}>
+                            Verifica WhatsApp per il numero:<br />
+                            <strong style={{ color: '#128C7E', fontSize: '1rem' }}>{phone}</strong>
+                          </div>
                         </div>
+
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(`*RAMID - Registrazione Persona Fisica*\n\n👤 Nome: ${firstName} ${lastName}\n📄 CF: ${fiscalCode}\n🔑 Codice di Verifica: *${otpSentCode}*\n\nRichiedo la registrazione e l'attivazione del mio profilo Persona Fisica su RAMID.`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            background: '#25D366',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '0.88rem',
+                            textDecoration: 'none',
+                            boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
+                            marginTop: '4px'
+                          }}
+                        >
+                          <span>💬</span> Apri WhatsApp per Inviare il Messaggio
+                        </a>
                       </div>
 
                       {otpSentCode && (
-                        <div style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-purple)', padding: '10px', borderRadius: '8px', fontSize: '0.78rem', border: '1px solid rgba(139,92,246,0.2)' }}>
-                          🔑 Codice OTP di test: <strong>{otpSentCode}</strong>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: 'rgba(37, 211, 102, 0.08)',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(37, 211, 102, 0.25)'
+                        }}>
+                          <div style={{ fontSize: '0.84rem', color: '#1e293b' }}>
+                            Codice OTP: <strong style={{ fontSize: '1.05rem', color: '#128C7E', letterSpacing: '2px' }}>{otpSentCode}</strong>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setOtpCode(otpSentCode)}
+                            style={{
+                              background: '#128C7E',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ⚡ Inserisci
+                          </button>
                         </div>
                       )}
 
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label" style={{ fontWeight: 700 }}>Inserisci il codice a 6 cifre *</label>
+                        <label className="form-label" style={{ fontWeight: 700 }}>Codice di Verifica a 6 cifre *</label>
                         <input 
                           type="text" 
                           className="form-control" 
@@ -707,7 +807,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
 
                         {resendTimer > 0 ? (
                           <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                            Reinvia tra <strong>{resendTimer}s</strong>
+                            Nuovo codice tra <strong>{resendTimer}s</strong>
                           </span>
                         ) : (
                           <button
@@ -722,13 +822,13 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                             style={{
                               background: 'none',
                               border: 'none',
-                              color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)',
+                              color: '#128C7E',
                               fontWeight: 700,
                               fontSize: '0.8rem',
                               cursor: 'pointer'
                             }}
                           >
-                            🔄 Reinvia codice
+                            🔄 Rigenera codice
                           </button>
                         )}
                       </div>
