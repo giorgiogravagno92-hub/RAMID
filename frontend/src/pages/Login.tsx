@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, API_BASE_URL } from '../utils/api';
-import { CITIES, PROVINCE_SIGLE, COMPANY_SECTORS, PROFESSIONS, REGIONS_AND_PROVINCES } from '../utils/constants';
+import { api } from '../utils/api';
 
 interface LoginProps {
   initialRole: string; // 'WORKER' or 'COMPANY'
@@ -23,15 +22,6 @@ const validatePassword = (pass: string): string | null => {
   return null;
 };
 
-const findRegionByProvince = (provinceName: string): string => {
-  for (const [region, provinces] of Object.entries(REGIONS_AND_PROVINCES)) {
-    if (Array.isArray(provinces) && provinces.includes(provinceName)) {
-      return region;
-    }
-  }
-  return 'Lazio';
-};
-
 export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [verificationEmailSentTo, setVerificationEmailSentTo] = useState<string | null>(null);
@@ -39,23 +29,16 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState(initialRole);
-  const [fiscalCode, setFiscalCode] = useState('');
-  const [otpSentEmail, setOtpSentEmail] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [vatNumber, setVatNumber] = useState('IT');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [province, setProvince] = useState('');
-  const [sigla, setSigla] = useState('');
-  const [sector, setSector] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
-  // Forgot Password / Access Recovery States
+  // Forgot Password States
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -67,43 +50,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
   const [forgotError, setForgotError] = useState('');
   const [forgotMessage, setForgotMessage] = useState('');
 
-  // Recruiter Persona Fisica / OTP States
-  const [companyType, setCompanyType] = useState<'AZIENDA' | 'PERSONA_FISICA'>('AZIENDA');
-  const [phone, setPhone] = useState('+39 ');
-  const [showOtpScreen, setShowOtpScreen] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSentCode, setOtpSentCode] = useState('');
-  const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email'>('whatsapp');
-  const [resendTimer, setResendTimer] = useState<number>(0);
-
-  // Candidate Curriculum states
-  const [profession, setProfession] = useState('');
-  const [noEducation, setNoEducation] = useState(false);
-  const [educationTitles, setEducationTitles] = useState<any[]>([]);
-  const [noExperience, setNoExperience] = useState(false);
-  const [workExperiences, setWorkExperiences] = useState<any[]>([]);
-
-  // Temp states to add education/experience items
-  const [newEduLevel, setNewEduLevel] = useState('DIPLOMA');
-  const [newEduField, setNewEduField] = useState('');
-  const [newEduConseguitoPresso, setNewEduConseguitoPresso] = useState('');
-  const [newEduInData, setNewEduInData] = useState('');
-
-  const [newExpCompany, setNewExpCompany] = useState('');
-  const [newExpRole, setNewExpRole] = useState('');
-  const [newExpStartDate, setNewExpStartDate] = useState('');
-  const [newExpEndDate, setNewExpEndDate] = useState('');
-  const [newExpDesc, setNewExpDesc] = useState('');
-  const [newExpCity, setNewExpCity] = useState('');
-
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (resendTimer > 0) {
-      const t = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(t);
-    }
-  }, [resendTimer]);
 
   useEffect(() => {
     if (!verificationEmailSentTo || !registrationToken) return;
@@ -124,14 +71,9 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
   }, [verificationEmailSentTo, registrationToken, onLoginSuccess]);
 
   useEffect(() => {
-    setShowOtpScreen(false);
     setError('');
-    setOtpCode('');
-    setOtpSentCode('');
-    setOtpSentEmail('');
     setRegistrationToken(null);
-    setResendTimer(0);
-  }, [isLogin, role, companyType]);
+  }, [isLogin, role]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,7 +90,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
             expectedRole: 'WORKER' 
           });
           onLoginSuccess(res.user, res.token);
-        } else if (role === 'COMPANY' && companyType === 'AZIENDA') {
+        } else {
           // Company Login
           const cleanVat = vatNumber.replace(/^IT/i, '').trim();
           if (!email.trim() && !cleanVat) {
@@ -163,39 +105,6 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
             expectedRole: 'COMPANY'
           });
           onLoginSuccess(res.user, res.token);
-        } else if (role === 'COMPANY' && companyType === 'PERSONA_FISICA') {
-          // Persona Fisica Login
-          if (!showOtpScreen) {
-            if (!firstName.trim() || !lastName.trim() || !fiscalCode.trim() || !phone.trim()) {
-              setError('Nome, Cognome, Codice Fiscale e Cellulare sono obbligatori.');
-              setLoading(false);
-              return;
-            }
-            const res = await api.auth.sendOtp({
-              firstName,
-              lastName,
-              fiscalCode,
-              phone,
-              channel: otpChannel,
-              isRegistration: false
-            });
-            setOtpSentCode(res.code);
-            setOtpSentEmail(res.email || '');
-            setShowOtpScreen(true);
-            setResendTimer(60);
-          } else {
-            if (!otpCode.trim()) {
-              setError('Codice OTP richiesto.');
-              setLoading(false);
-              return;
-            }
-            const res = await api.auth.verifyOtp({ 
-              email: otpSentEmail || email.trim() || undefined, 
-              phone: phone.trim() || undefined, 
-              code: otpCode.trim() 
-            });
-            onLoginSuccess(res.user, res.token);
-          }
         }
       } else {
         if (!acceptPrivacy) {
@@ -204,8 +113,8 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
           return;
         }
 
-        // PEC validation ONLY for Company / Azienda (not Persona Fisica)
-        if (role === 'COMPANY' && companyType === 'AZIENDA') {
+        // PEC validation for Company / Azienda
+        if (role === 'COMPANY') {
           const emailLower = email.toLowerCase().trim();
           const domain = emailLower.split('@')[1];
           const validPecDomains = new Set([
@@ -246,77 +155,47 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
           }
         }
 
-        // Recruiter Persona Fisica OTP Registration flow
-        if (role === 'COMPANY' && companyType === 'PERSONA_FISICA') {
-          if (!firstName.trim() || !lastName.trim() || !phone.trim() || !email.trim() || !fiscalCode.trim()) {
-            setError('Nome, Cognome, Codice Fiscale, Email e Numero di Telefono sono obbligatori.');
+        // Registration password complexity check
+        const passErr = validatePassword(password);
+        if (passErr) {
+          setError(passErr);
+          setLoading(false);
+          return;
+        }
+
+        let profileData: any = {};
+        if (role === 'COMPANY') {
+          const cleanVat = vatNumber.replace(/^IT/i, '');
+          if (!/^\d{11}$/.test(cleanVat)) {
+            setError('La Partita IVA deve essere composta dalla sigla IT seguita da esattamente 11 cifre.');
             setLoading(false);
             return;
           }
-
-          if (!showOtpScreen) {
-            // Send OTP first
-            const res = await api.auth.sendOtp({ 
-              email: email.trim(), 
-              phone: phone.trim(), 
-              firstName: firstName.trim(), 
-              lastName: lastName.trim(), 
-              channel: otpChannel, 
-              isRegistration: true 
-            });
-            setOtpSentCode(res.code);
-            setShowOtpScreen(true);
-            setResendTimer(60);
-          } else {
-            // Register with OTP
-            const profileData = {
-              companyType: 'PERSONA_FISICA',
-              firstName: firstName.trim(),
-              lastName: lastName.trim(),
-              contactPhone: phone.trim(),
-              fiscalCode: fiscalCode.trim(),
-              otpCode: otpCode.trim()
-            };
-            const res = await api.auth.register({ email: email.trim(), role, profileData });
-            onLoginSuccess(res.user, res.token);
+          if (!companyName.trim()) {
+            setError('La Ragione Sociale / Nome Azienda è obbligatoria.');
+            setLoading(false);
+            return;
           }
+          profileData.companyType = 'AZIENDA';
+          profileData.companyName = companyName.trim();
+          profileData.vatNumber = 'IT' + cleanVat;
         } else {
-          // Registration password complexity check
-          const passErr = validatePassword(password);
-          if (passErr) {
-            setError(passErr);
+          // Worker registration checks: Nome and Cognome
+          if (!firstName.trim() || !lastName.trim()) {
+            setError('Nome e Cognome sono obbligatori.');
             setLoading(false);
             return;
           }
-
-          let profileData: any = {};
-          if (role === 'COMPANY') {
-            const cleanVat = vatNumber.replace(/^IT/i, '');
-            if (!/^\d{11}$/.test(cleanVat)) {
-              setError('La Partita IVA deve essere composta dalla sigla IT seguita da esattamente 11 cifre.');
-              setLoading(false);
-              return;
-            }
-            profileData.companyName = companyName;
-            profileData.vatNumber = 'IT' + cleanVat;
-          } else {
-            // Worker registration checks: ONLY Nome and Cognome
-            if (!firstName.trim() || !lastName.trim()) {
-              setError('Nome e Cognome sono obbligatori.');
-              setLoading(false);
-              return;
-            }
-            profileData.firstName = firstName;
-            profileData.lastName = lastName;
-          }
-          
-          const res = await api.auth.register({ email, password, role, profileData });
-          if (res && res.emailVerificationRequired) {
-            setRegistrationToken(res.registrationToken || null);
-            setVerificationEmailSentTo(res.email);
-          } else {
-            onLoginSuccess(res.user, res.token);
-          }
+          profileData.firstName = firstName.trim();
+          profileData.lastName = lastName.trim();
+        }
+        
+        const res = await api.auth.register({ email: email.trim(), password, role, profileData });
+        if (res && res.emailVerificationRequired) {
+          setRegistrationToken(res.registrationToken || null);
+          setVerificationEmailSentTo(res.email);
+        } else {
+          onLoginSuccess(res.user, res.token);
         }
       }
     } catch (err: any) {
@@ -383,20 +262,19 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
     <div className="container" style={{ display: 'flex', justifyContent: 'center', padding: '60px 24px' }}>
       <div className="glass-card" style={{ width: '100%', maxWidth: '480px' }}>
         <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>
-          {isLogin ? 'Accedi a Ramid' : 'Registrati come ' + (role === 'COMPANY' ? 'Recruiter' : 'Lavoratore')}
+          {isLogin ? 'Accedi a Ramid' : 'Registrati come ' + (role === 'COMPANY' ? 'Azienda / Società' : 'Candidato')}
         </h2>
         <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>
-          Inserisci le tue credenziali per accedere.
+          {isLogin ? 'Inserisci le tue credenziali per accedere.' : 'Crea il tuo account in pochi semplici passaggi.'}
         </p>
-
-
 
         {error && (
           <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)', color: 'var(--accent-red)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem' }}>
             ⚠️ {error}
           </div>
         )}
-        {/* Form */}
+
+        {/* Verification Message */}
         {verificationEmailSentTo ? (
           <div style={{ textAlign: 'center', padding: '10px 0' }}>
             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📧</div>
@@ -422,498 +300,9 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
         ) : (
           <>
             <form onSubmit={handleSubmit}>
-              {/* REGISTER FOR COMPANY TYPE TOGGLE */}
-              {role === 'COMPANY' && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => { setCompanyType('AZIENDA'); setShowOtpScreen(false); setError(''); }}
-                    className="btn"
-                    disabled={showOtpScreen}
-                    style={{ flex: 1, padding: '8px', fontSize: '0.78rem', background: companyType === 'AZIENDA' ? 'var(--accent-blue)' : 'transparent', color: companyType === 'AZIENDA' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '6px', fontWeight: 600, opacity: showOtpScreen ? 0.5 : 1 }}
-                  >
-                    🏢 Società / Azienda
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => { setCompanyType('PERSONA_FISICA'); setShowOtpScreen(false); setError(''); }}
-                    className="btn"
-                    disabled={showOtpScreen}
-                    style={{ flex: 1, padding: '8px', fontSize: '0.78rem', background: companyType === 'PERSONA_FISICA' ? 'var(--accent-purple)' : 'transparent', color: companyType === 'PERSONA_FISICA' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '6px', fontWeight: 600, opacity: showOtpScreen ? 0.5 : 1 }}
-                  >
-                    👤 Persona Fisica
-                  </button>
-                </div>
-              )}
-
-              {/* LOGIN PERSONA FISICA OTP (FORM DETAILS / SEND OTP) */}
-              {isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && !showOtpScreen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(37,211,102,0.08)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(37,211,102,0.25)' }}>
-                    🟢 <strong>Accesso Rapido Persona Fisica</strong>: Inserisci i tuoi dati per ricevere il codice OTP sul tuo cellulare.
-                  </div>
-
-                  {/* Channel Selector */}
-                  <div>
-                    <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Canale di ricezione codice OTP:</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setOtpChannel('whatsapp')}
-                        style={{
-                          flex: 1,
-                          padding: '8px 10px',
-                          borderRadius: '8px',
-                          border: otpChannel === 'whatsapp' ? '2px solid #25D366' : '1px solid #cbd5e1',
-                          background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : '#ffffff',
-                          color: otpChannel === 'whatsapp' ? '#128C7E' : '#475569',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <span style={{ fontSize: '1rem' }}>💬</span> WhatsApp (Gratis)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setOtpChannel('email')}
-                        style={{
-                          flex: 1,
-                          padding: '8px 10px',
-                          borderRadius: '8px',
-                          border: otpChannel === 'email' ? '2px solid var(--accent-blue)' : '1px solid #cbd5e1',
-                          background: otpChannel === 'email' ? 'rgba(59, 130, 246, 0.12)' : '#ffffff',
-                          color: otpChannel === 'email' ? 'var(--accent-blue)' : '#475569',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <span>📧</span> Email
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="form-control-row" style={{ marginBottom: 0 }}>
-                    <div>
-                      <label className="form-label">Nome *</label>
-                      <input 
-                        type="text" 
-                        className="form-control" 
-                        value={firstName} 
-                        onChange={(e) => setFirstName(formatCapitalizedWords(e.target.value))} 
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Cognome *</label>
-                      <input 
-                        type="text" 
-                        className="form-control" 
-                        value={lastName} 
-                        onChange={(e) => setLastName(formatCapitalizedWords(e.target.value))} 
-                        required 
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Codice Fiscale *</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      value={fiscalCode} 
-                      onChange={(e) => setFiscalCode(e.target.value.toUpperCase())} 
-                      placeholder="es. RSSMRA80A01H501W"
-                      required 
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Numero di Telefono (Cellulare WhatsApp) *</label>
-                    <input 
-                      type="tel" 
-                      className="form-control" 
-                      value={phone} 
-                      onChange={(e) => setPhone(e.target.value)} 
-                      placeholder="es. +39 333 1234567"
-                      required 
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* LOGIN PERSONA FISICA OTP (VERIFY CODE SCREEN) */}
-              {isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && showOtpScreen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-                  <div style={{
-                    background: 'rgba(37, 211, 102, 0.12)',
-                    border: '1px solid rgba(37, 211, 102, 0.3)',
-                    borderRadius: '12px',
-                    padding: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '1.6rem' }}>💬</span>
-                      <div style={{ fontSize: '0.86rem', color: '#1e293b', lineHeight: '1.4' }}>
-                        Verifica WhatsApp per il numero:<br />
-                        <strong style={{ color: '#128C7E', fontSize: '1rem' }}>{phone}</strong>
-                      </div>
-                    </div>
-
-                    <a
-                      href={`https://wa.me/?text=${encodeURIComponent(`*RAMID - Verifica Persona Fisica*\n\n👤 Nome: ${firstName} ${lastName}\n📄 CF: ${fiscalCode}\n🔑 Codice di Verifica: *${otpSentCode}*\n\nRichiedo la verifica e l'accesso su RAMID.`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        background: '#25D366',
-                        color: '#ffffff',
-                        border: 'none',
-                        padding: '10px 14px',
-                        borderRadius: '8px',
-                        fontWeight: 700,
-                        fontSize: '0.88rem',
-                        textDecoration: 'none',
-                        boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
-                        marginTop: '4px'
-                      }}
-                    >
-                      <span>💬</span> Apri WhatsApp per Inviare il Messaggio
-                    </a>
-                  </div>
-
-                  {otpSentCode && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      background: 'rgba(37, 211, 102, 0.08)',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(37, 211, 102, 0.25)'
-                    }}>
-                      <div style={{ fontSize: '0.84rem', color: '#1e293b' }}>
-                        Codice OTP: <strong style={{ fontSize: '1.05rem', color: '#128C7E', letterSpacing: '2px' }}>{otpSentCode}</strong>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setOtpCode(otpSentCode)}
-                        style={{
-                          background: '#128C7E',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '6px 12px',
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        ⚡ Inserisci
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontWeight: 700 }}>Codice di Verifica a 6 cifre *</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      value={otpCode} 
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} 
-                      placeholder="• • • • • •"
-                      style={{
-                        fontSize: '1.3rem',
-                        letterSpacing: '6px',
-                        textAlign: 'center',
-                        fontWeight: 800
-                      }}
-                      autoFocus
-                      required 
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setShowOtpScreen(false); setOtpCode(''); }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-secondary)',
-                        fontSize: '0.8rem',
-                        cursor: 'pointer',
-                        textDecoration: 'underline'
-                      }}
-                    >
-                      ← Modifica dati
-                    </button>
-
-                    {resendTimer > 0 ? (
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        Nuovo codice tra <strong>{resendTimer}s</strong>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await api.auth.sendOtp({ firstName, lastName, fiscalCode, phone, channel: otpChannel, isRegistration: false });
-                            setOtpSentCode(res.code);
-                            setResendTimer(60);
-                          } catch (e) {}
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#128C7E',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        🔄 Rigenera codice
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* REGISTRATION RECRUITER PERSONA FISICA */}
-              {!isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-                  {showOtpScreen ? (
-                    <>
-                      <div style={{
-                        background: 'rgba(37, 211, 102, 0.12)',
-                        border: '1px solid rgba(37, 211, 102, 0.3)',
-                        borderRadius: '12px',
-                        padding: '14px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '1.6rem' }}>💬</span>
-                          <div style={{ fontSize: '0.86rem', color: '#1e293b', lineHeight: '1.4' }}>
-                            Verifica WhatsApp per il numero:<br />
-                            <strong style={{ color: '#128C7E', fontSize: '1rem' }}>{phone}</strong>
-                          </div>
-                        </div>
-
-                        <a
-                          href={`https://wa.me/?text=${encodeURIComponent(`*RAMID - Registrazione Persona Fisica*\n\n👤 Nome: ${firstName} ${lastName}\n📄 CF: ${fiscalCode}\n🔑 Codice di Verifica: *${otpSentCode}*\n\nRichiedo la registrazione e l'attivazione del mio profilo Persona Fisica su RAMID.`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            background: '#25D366',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '10px 14px',
-                            borderRadius: '8px',
-                            fontWeight: 700,
-                            fontSize: '0.88rem',
-                            textDecoration: 'none',
-                            boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
-                            marginTop: '4px'
-                          }}
-                        >
-                          <span>💬</span> Apri WhatsApp per Inviare il Messaggio
-                        </a>
-                      </div>
-
-                      {otpSentCode && (
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: 'rgba(37, 211, 102, 0.08)',
-                          padding: '10px 14px',
-                          borderRadius: '10px',
-                          border: '1px solid rgba(37, 211, 102, 0.25)'
-                        }}>
-                          <div style={{ fontSize: '0.84rem', color: '#1e293b' }}>
-                            Codice OTP: <strong style={{ fontSize: '1.05rem', color: '#128C7E', letterSpacing: '2px' }}>{otpSentCode}</strong>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setOtpCode(otpSentCode)}
-                            style={{
-                              background: '#128C7E',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '6px 12px',
-                              fontSize: '0.78rem',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ⚡ Inserisci
-                          </button>
-                        </div>
-                      )}
-
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label" style={{ fontWeight: 700 }}>Codice di Verifica a 6 cifre *</label>
-                        <input 
-                          type="text" 
-                          className="form-control" 
-                          value={otpCode} 
-                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} 
-                          placeholder="• • • • • •"
-                          style={{
-                            fontSize: '1.3rem',
-                            letterSpacing: '6px',
-                            textAlign: 'center',
-                            fontWeight: 800
-                          }}
-                          autoFocus
-                          required 
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                        <button
-                          type="button"
-                          onClick={() => { setShowOtpScreen(false); setOtpCode(''); }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text-secondary)',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            textDecoration: 'underline'
-                          }}
-                        >
-                          ← Modifica dati
-                        </button>
-
-                        {resendTimer > 0 ? (
-                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                            Nuovo codice tra <strong>{resendTimer}s</strong>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const res = await api.auth.sendOtp({ email, phone, firstName, lastName, channel: otpChannel, isRegistration: true });
-                                setOtpSentCode(res.code);
-                                setResendTimer(60);
-                              } catch (e) {}
-                            }}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#128C7E',
-                              fontWeight: 700,
-                              fontSize: '0.8rem',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🔄 Rigenera codice
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(37,211,102,0.08)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(37,211,102,0.25)' }}>
-                        🟢 <strong>Registrazione Persona Fisica</strong>: Inserisci la tua email personale ordinaria (es. Gmail, Libero, Hotmail) e il tuo cellulare. <strong>Nessuna PEC richiesta</strong>: la verifica dell'identità avviene direttamente sul tuo cellulare tramite WhatsApp!
-                      </div>
-
-                      <div className="form-control-row" style={{ marginBottom: 0 }}>
-                        <div>
-                          <label className="form-label">Nome *</label>
-                          <input 
-                            type="text" 
-                            className="form-control" 
-                            value={firstName} 
-                            onChange={(e) => setFirstName(formatCapitalizedWords(e.target.value))} 
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="form-label">Cognome *</label>
-                          <input 
-                            type="text" 
-                            className="form-control" 
-                            value={lastName} 
-                            onChange={(e) => setLastName(formatCapitalizedWords(e.target.value))} 
-                            required 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Codice Fiscale *</label>
-                        <input 
-                          type="text" 
-                          className="form-control" 
-                          value={fiscalCode} 
-                          onChange={(e) => setFiscalCode(e.target.value.toUpperCase())} 
-                          placeholder="es. RSSMRA80A01H501W"
-                          required 
-                        />
-                      </div>
-
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>Indirizzo Email Ordinaria *</label>
-                          <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700 }}>Nessun vincolo PEC</span>
-                        </div>
-                        <input 
-                          type="email" 
-                          className="form-control" 
-                          value={email} 
-                          onChange={(e) => setEmail(e.target.value)} 
-                          placeholder="es. nome.cognome@gmail.com"
-                          required 
-                        />
-                        <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                          ✉️ Puoi usare qualsiasi email (Gmail, Libero, Outlook, Yahoo...).
-                        </span>
-                      </div>
-
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Numero di Cellulare (Verifica WhatsApp) *</label>
-                        <input 
-                          type="tel" 
-                          className="form-control" 
-                          value={phone} 
-                          onChange={(e) => setPhone(e.target.value)} 
-                          placeholder="es. +39 333 1234567"
-                          required 
-                        />
-                        <span style={{ display: 'block', fontSize: '0.73rem', color: '#128C7E', fontWeight: 600, marginTop: '4px' }}>
-                          📲 Riceverai il codice di verifica a 6 cifre direttamente su WhatsApp su questo numero.
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* TRADITIONAL REGISTRATION WORKER */}
+              {/* REGISTRATION WORKER */}
               {!isLogin && role === 'WORKER' && (
-                <div className="form-control-row" style={{ marginBottom: '20px' }}>
+                <div className="form-control-row" style={{ marginBottom: '16px' }}>
                   <div>
                     <label className="form-label">Nome *</label>
                     <input 
@@ -921,6 +310,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                       className="form-control" 
                       value={firstName} 
                       onChange={(e) => setFirstName(formatCapitalizedWords(e.target.value))} 
+                      placeholder="es. Mario"
                       required 
                     />
                   </div>
@@ -931,22 +321,24 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                       className="form-control" 
                       value={lastName} 
                       onChange={(e) => setLastName(formatCapitalizedWords(e.target.value))} 
+                      placeholder="es. Rossi"
                       required 
                     />
                   </div>
                 </div>
               )}
 
-              {/* TRADITIONAL REGISTRATION AZIENDA */}
-              {!isLogin && role === 'COMPANY' && companyType === 'AZIENDA' && (
-                <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* REGISTRATION AZIENDA */}
+              {!isLogin && role === 'COMPANY' && (
+                <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Nome azienda *</label>
+                    <label className="form-label">Nome Azienda / Ragione Sociale *</label>
                     <input 
                       type="text" 
                       className="form-control" 
                       value={companyName} 
                       onChange={(e) => setCompanyName(formatCapitalizedWords(e.target.value))} 
+                      placeholder="es. Acme S.r.l."
                       required 
                     />
                   </div>
@@ -962,19 +354,23 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                         const digits = val.replace(/^IT/i, '').replace(/[^0-9]/g, '').slice(0, 11);
                         setVatNumber('IT' + digits);
                       }} 
+                      placeholder="es. IT12345678901"
                       required 
                     />
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                      Inserisci la sigla IT seguita dalle 11 cifre della Partita IVA.
+                    </span>
                   </div>
                 </div>
               )}
 
               {/* LOGIN AZIENDA PARTITA IVA FIELD */}
-              {isLogin && role === 'COMPANY' && companyType === 'AZIENDA' && (
+              {isLogin && role === 'COMPANY' && (
                 <>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.4', background: 'rgba(59,130,246,0.05)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.1)' }}>
                     💡 Inserisci <strong>a tua scelta</strong> o la Partita IVA o l'Indirizzo PEC Aziendale, insieme alla password.
                   </div>
-                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div className="form-group" style={{ marginBottom: '14px' }}>
                     <label className="form-label">Partita IVA (o PEC Aziendale)</label>
                     <input 
                       type="text" 
@@ -991,90 +387,88 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                 </>
               )}
 
-              {/* STANDARD INPUTS FOR PASSWORD & EMAIL IN OTHER CASES */}
-              {!(role === 'COMPANY' && companyType === 'PERSONA_FISICA') && (
-                <>
-                  <div className="form-group">
-                    <label className="form-label">
-                      {role === 'COMPANY' ? 'Indirizzo PEC Aziendale (o Partita IVA)' : 'Indirizzo Email *'}
-                    </label>
-                    <input 
-                      type="email" 
-                      className="form-control" 
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                      placeholder={role === 'COMPANY' ? "es. pec@azienda.it" : "es. nome@email.it"}
-                      required={isLogin ? (role === 'WORKER') : true} 
-                    />
-                  </div>
+              {/* EMAIL / PEC FIELD */}
+              <div className="form-group">
+                <label className="form-label">
+                  {role === 'COMPANY' ? (isLogin ? 'Oppure Indirizzo PEC Aziendale' : 'Indirizzo PEC Aziendale *') : 'Indirizzo Email *'}
+                </label>
+                <input 
+                  type="email" 
+                  className="form-control" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder={role === 'COMPANY' ? "es. info@pec.azienda.it" : "es. mario.rossi@email.it"}
+                  required={isLogin ? (role === 'WORKER') : true} 
+                />
+              </div>
 
-                  <div className="form-group" style={{ marginBottom: isLogin ? '20px' : '10px' }}>
-                    <label className="form-label">Password</label>
-                    <div style={{ position: 'relative' }}>
-                      <input 
-                        type={showPassword ? "text" : "password"} 
-                        className="form-control" 
-                        value={password} 
-                        onChange={(e) => setPassword(e.target.value)} 
-                        placeholder="••••••••"
-                        style={{ paddingRight: '40px' }}
-                        required 
-                      />
-                      <button
-                        type="button"
-                        onMouseDown={() => setShowPassword(true)}
-                        onMouseUp={() => setShowPassword(false)}
-                        onMouseLeave={() => setShowPassword(false)}
-                        onTouchStart={(e) => { e.preventDefault(); setShowPassword(true); }}
-                        onTouchEnd={(e) => { e.preventDefault(); setShowPassword(false); }}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: '1rem',
-                          padding: '4px',
-                          color: showPassword ? 'var(--accent-blue)' : 'var(--text-muted)',
-                          userSelect: 'none',
-                          outline: 'none',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        title="Tieni premuto per mostrare la password"
-                      >
-                        👁️
-                      </button>
-                    </div>
-                    {isLogin && (
-                      <div style={{ textAlign: 'right', marginTop: '6px' }}>
-                        <span 
-                          style={{ color: 'var(--accent-blue)', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
-                          onClick={() => {
-                            setShowForgotPassword(true);
-                            setForgotStep(1);
-                            setForgotEmail(email);
-                            setForgotVatNumber(vatNumber !== 'IT' ? vatNumber : '');
-                            setForgotError('');
-                            setForgotMessage('');
-                          }}
-                        >
-                          Hai dimenticato la password?
-                        </span>
-                      </div>
-                    )}
-                    {!isLogin && (
-                      <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: '1.3' }}>
-                        🔒 La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.
-                      </span>
-                    )}
+              {/* PASSWORD FIELD */}
+              <div className="form-group" style={{ marginBottom: isLogin ? '20px' : '10px' }}>
+                <label className="form-label">Password *</label>
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    className="form-control" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    style={{ paddingRight: '40px' }}
+                    required 
+                  />
+                  <button
+                    type="button"
+                    onMouseDown={() => setShowPassword(true)}
+                    onMouseUp={() => setShowPassword(false)}
+                    onMouseLeave={() => setShowPassword(false)}
+                    onTouchStart={(e) => { e.preventDefault(); setShowPassword(true); }}
+                    onTouchEnd={(e) => { e.preventDefault(); setShowPassword(false); }}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      padding: '4px',
+                      color: showPassword ? 'var(--accent-blue)' : 'var(--text-muted)',
+                      userSelect: 'none',
+                      outline: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    title="Tieni premuto per mostrare la password"
+                  >
+                    👁️
+                  </button>
+                </div>
+                {isLogin && (
+                  <div style={{ textAlign: 'right', marginTop: '6px' }}>
+                    <span 
+                      style={{ color: 'var(--accent-blue)', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
+                      onClick={() => {
+                        setShowForgotPassword(true);
+                        setForgotStep(1);
+                        setForgotEmail(email);
+                        setForgotVatNumber(vatNumber !== 'IT' ? vatNumber : '');
+                        setForgotError('');
+                        setForgotMessage('');
+                      }}
+                    >
+                      Hai dimenticato la password?
+                    </span>
                   </div>
-                </>
-              )}
+                )}
+                {!isLogin && (
+                  <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: '1.3' }}>
+                    🔒 La password deve contenere almeno 8 caratteri, una lettera maiuscola, un numero e un simbolo.
+                  </span>
+                )}
+              </div>
 
+              {/* PRIVACY CHECKBOX */}
               {!isLogin && (
                 <div style={{ margin: '15px 0', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                   <input 
@@ -1107,28 +501,11 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                   width: '100%',
                   padding: '14px',
                   marginTop: '10px',
-                  background: (role === 'COMPANY' && companyType === 'PERSONA_FISICA' && !showOtpScreen && otpChannel === 'whatsapp')
-                    ? 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)'
-                    : undefined,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
                   fontWeight: 700
                 }}
                 disabled={loading}
               >
-                {loading ? 'Elaborazione in corso...' : (
-                  isLogin ? (
-                    (role === 'COMPANY' && companyType === 'PERSONA_FISICA') ? (
-                      showOtpScreen ? '🔐 Verifica OTP ed Accedi' : (otpChannel === 'whatsapp' ? '💬 Invia Codice su WhatsApp' : '📧 Invia Codice via Email')
-                    ) : 'Accedi'
-                  ) : (
-                    (role === 'COMPANY' && companyType === 'PERSONA_FISICA') ? (
-                      showOtpScreen ? '✅ Conferma e Registrati' : (otpChannel === 'whatsapp' ? '💬 Invia Codice su WhatsApp' : '📧 Invia Codice via Email')
-                    ) : 'Completa Registrazione'
-                  )
-                )}
+                {loading ? 'Elaborazione in corso...' : (isLogin ? 'Accedi' : 'Completa Registrazione')}
               </button>
             </form>
           </>
@@ -1185,9 +562,9 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                   I dati sono trattati esclusivamente per le seguenti finalità:
                 </p>
                 <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                  <li>Creazione e gestione del profilo utente (Lavoratore o Recruiter).</li>
-                  <li>Simulazione ed erogazione del servizio di abbinamento (match) con le proposte delle aziende.</li>
-                  <li>Condivisione autorizzata dei recapiti telefonici/email tra candidati e aziende a seguito dell'accettazione esplicita della proposta ("Rispondi Subito").</li>
+                  <li>Creazione e gestione del profilo utente (Lavoratore o Azienda).</li>
+                  <li>Abbinamento (match) con le proposte delle aziende.</li>
+                  <li>Condivisione autorizzata dei recapiti telefonici/email tra candidati e aziende a seguito dell'accettazione esplicita della proposta.</li>
                 </ul>
                 <p style={{ margin: '6px 0 0 0' }}>
                   La base giuridica del trattamento è il <strong>consenso esplicito</strong> dell'utente (Art. 6.1.a GDPR), espresso tramite la spunta del checkbox di registrazione.
@@ -1197,21 +574,21 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
               <div>
                 <strong style={{ color: '#0f172a' }}>4. Destinatari dei Dati e Sicurezza</strong>
                 <p style={{ margin: '4px 0 0 0' }}>
-                  I tuoi recapiti telefonici e l'email non verranno mai divulgati pubblicamente o a terzi estranei. Verranno mostrati esclusivamente al recruiter dell'azienda proponente a seguito dell'accettazione della proposta di lavoro da parte tua. Adottiamo idonee misure di sicurezza per proteggere i dati da accessi non autorizzati o perdite.
+                  I tuoi recapiti non verranno mai divulgati pubblicamente o a terzi estranei. Verranno mostrati esclusivamente all'azienda proponente a seguito dell'accettazione della proposta di lavoro da parte tua.
                 </p>
               </div>
 
               <div>
                 <strong style={{ color: '#0f172a' }}>5. Conservazione dei Dati</strong>
                 <p style={{ margin: '4px 0 0 0' }}>
-                  I dati personali saranno conservati finché il tuo account rimarrà attivo. Puoi richiedere la cancellazione totale del tuo account o la revoca del consenso in qualsiasi momento.
+                  I dati personali saranno conservati finché il tuo account rimarrà attivo. Puoi richiedere la cancellazione totale del tuo account in qualsiasi momento.
                 </p>
               </div>
 
               <div>
                 <strong style={{ color: '#0f172a' }}>6. Diritti dell'Interessato</strong>
                 <p style={{ margin: '4px 0 0 0' }}>
-                  Hai il diritto di accedere ai tuoi dati, chiederne la rettifica, la cancellazione (diritto all'oblio), la limitazione del trattamento o la portabilità, scrivendo all'indirizzo email del Titolare.
+                  Hai il diritto di accedere ai tuoi dati, chiederne la rettifica, la cancellazione (diritto all'oblio), la limitazione del trattamento o la portabilità.
                 </p>
               </div>
             </div>
@@ -1238,7 +615,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
               <h3 style={{ fontSize: '1.3rem', color: '#0284c7', margin: 0, fontWeight: 800 }}>Recupero Password</h3>
               <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px' }}>
                 {forgotStep === 1 
-                  ? 'Inserisci la tua email di registrazione per ricevere il codice di sicurezza.' 
+                  ? 'Inserisci la tua email/PEC di registrazione per ricevere il codice di sicurezza.' 
                   : 'Inserisci il codice ricevuto via email e la tua nuova password.'}
               </p>
             </div>
