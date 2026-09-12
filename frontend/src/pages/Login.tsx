@@ -69,10 +69,12 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
 
   // Recruiter Persona Fisica / OTP States
   const [companyType, setCompanyType] = useState<'AZIENDA' | 'PERSONA_FISICA'>('AZIENDA');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+39 ');
   const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [otpSentCode, setOtpSentCode] = useState('');
+  const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email'>('whatsapp');
+  const [resendTimer, setResendTimer] = useState<number>(0);
 
   // Candidate Curriculum states
   const [profession, setProfession] = useState('');
@@ -95,6 +97,13 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
   const [newExpCity, setNewExpCity] = useState('');
 
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const t = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [resendTimer]);
 
   useEffect(() => {
     if (!verificationEmailSentTo || !registrationToken) return;
@@ -121,6 +130,7 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
     setOtpSentCode('');
     setOtpSentEmail('');
     setRegistrationToken(null);
+    setResendTimer(0);
   }, [isLogin, role, companyType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -166,19 +176,24 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
               lastName,
               fiscalCode,
               phone,
+              channel: otpChannel,
               isRegistration: false
             });
             setOtpSentCode(res.code);
-            setOtpSentEmail(res.email);
+            setOtpSentEmail(res.email || '');
             setShowOtpScreen(true);
-            alert(`[SIMULAZIONE] Codice OTP inviato. Codice: ${res.code}`);
+            setResendTimer(60);
           } else {
             if (!otpCode.trim()) {
               setError('Codice OTP richiesto.');
               setLoading(false);
               return;
             }
-            const res = await api.auth.verifyOtp({ email: otpSentEmail, code: otpCode });
+            const res = await api.auth.verifyOtp({ 
+              email: otpSentEmail || email.trim() || undefined, 
+              phone: phone.trim() || undefined, 
+              code: otpCode.trim() 
+            });
             onLoginSuccess(res.user, res.token);
           }
         }
@@ -189,8 +204,8 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
           return;
         }
 
-        // PEC validation for Company (Azienda or Persona Fisica)
-        if (role === 'COMPANY') {
+        // PEC validation ONLY for Company / Azienda (not Persona Fisica)
+        if (role === 'COMPANY' && companyType === 'AZIENDA') {
           const emailLower = email.toLowerCase().trim();
           const domain = emailLower.split('@')[1];
           const validPecDomains = new Set([
@@ -241,21 +256,28 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
 
           if (!showOtpScreen) {
             // Send OTP first
-            const res = await api.auth.sendOtp({ email, phone, isRegistration: true });
+            const res = await api.auth.sendOtp({ 
+              email: email.trim(), 
+              phone: phone.trim(), 
+              firstName: firstName.trim(), 
+              lastName: lastName.trim(), 
+              channel: otpChannel, 
+              isRegistration: true 
+            });
             setOtpSentCode(res.code);
             setShowOtpScreen(true);
-            alert(`[SIMULAZIONE] Codice OTP inviato: ${res.code}`);
+            setResendTimer(60);
           } else {
             // Register with OTP
             const profileData = {
               companyType: 'PERSONA_FISICA',
-              firstName,
-              lastName,
-              contactPhone: phone,
-              fiscalCode,
-              otpCode
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              contactPhone: phone.trim(),
+              fiscalCode: fiscalCode.trim(),
+              otpCode: otpCode.trim()
             };
-            const res = await api.auth.register({ email, role, profileData });
+            const res = await api.auth.register({ email: email.trim(), role, profileData });
             onLoginSuccess(res.user, res.token);
           }
         } else {
@@ -426,7 +448,60 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
 
               {/* LOGIN PERSONA FISICA OTP (FORM DETAILS / SEND OTP) */}
               {isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && !showOtpScreen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(37,211,102,0.08)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(37,211,102,0.25)' }}>
+                    🟢 <strong>Accesso Rapido Persona Fisica</strong>: Inserisci i tuoi dati per ricevere il codice OTP sul tuo cellulare.
+                  </div>
+
+                  {/* Channel Selector */}
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Canale di ricezione codice OTP:</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setOtpChannel('whatsapp')}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          border: otpChannel === 'whatsapp' ? '2px solid #25D366' : '1px solid #cbd5e1',
+                          background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : '#ffffff',
+                          color: otpChannel === 'whatsapp' ? '#128C7E' : '#475569',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <span style={{ fontSize: '1rem' }}>💬</span> WhatsApp (Gratis)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOtpChannel('email')}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          border: otpChannel === 'email' ? '2px solid var(--accent-blue)' : '1px solid #cbd5e1',
+                          background: otpChannel === 'email' ? 'rgba(59, 130, 246, 0.12)' : '#ffffff',
+                          color: otpChannel === 'email' ? 'var(--accent-blue)' : '#475569',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <span>📧</span> Email
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="form-control-row" style={{ marginBottom: 0 }}>
                     <div>
                       <label className="form-label">Nome *</label>
@@ -461,12 +536,12 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                     />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Numero di Telefono (Cellulare) *</label>
+                    <label className="form-label">Numero di Telefono (Cellulare WhatsApp) *</label>
                     <input 
                       type="tel" 
                       className="form-control" 
                       value={phone} 
-                      onChange={(e) => setPhone(e.target.value.replace(/[^0-9+]/g, ''))} 
+                      onChange={(e) => setPhone(e.target.value)} 
                       placeholder="es. +39 333 1234567"
                       required 
                     />
@@ -474,51 +549,241 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                 </div>
               )}
 
-              {/* LOGIN PERSONA FISICA OTP (VERIFY CODE) */}
+              {/* LOGIN PERSONA FISICA OTP (VERIFY CODE SCREEN) */}
               {isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && showOtpScreen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-                  <div style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-purple)', padding: '10px', borderRadius: '8px', fontSize: '0.78rem', border: '1px solid rgba(139,92,246,0.2)' }}>
-                    🔑 Codice OTP di test: <strong>{otpSentCode}</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                  <div style={{
+                    background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                    border: otpChannel === 'whatsapp' ? '1px solid rgba(37, 211, 102, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <span style={{ fontSize: '1.6rem' }}>{otpChannel === 'whatsapp' ? '💬' : '📧'}</span>
+                    <div style={{ fontSize: '0.84rem', color: '#1e293b', lineHeight: '1.4' }}>
+                      Codice OTP inviato {otpChannel === 'whatsapp' ? 'su WhatsApp al numero' : 'all\'email'}:<br />
+                      <strong style={{ color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)', fontSize: '0.94rem' }}>
+                        {otpChannel === 'whatsapp' ? phone : (otpSentEmail || email)}
+                      </strong>
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Codice OTP *</label>
+
+                  {otpSentCode && (
+                    <div style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-purple)', padding: '10px', borderRadius: '8px', fontSize: '0.78rem', border: '1px solid rgba(139,92,246,0.2)' }}>
+                      🔑 Codice OTP di test: <strong>{otpSentCode}</strong>
+                    </div>
+                  )}
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 700 }}>Inserisci il codice a 6 cifre *</label>
                     <input 
                       type="text" 
                       className="form-control" 
                       value={otpCode} 
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} 
-                      placeholder="es. 123456"
+                      placeholder="• • • • • •"
+                      style={{
+                        fontSize: '1.3rem',
+                        letterSpacing: '6px',
+                        textAlign: 'center',
+                        fontWeight: 800
+                      }}
+                      autoFocus
                       required 
                     />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setShowOtpScreen(false); setOtpCode(''); }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      ← Modifica dati
+                    </button>
+
+                    {resendTimer > 0 ? (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        Reinvia tra <strong>{resendTimer}s</strong>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await api.auth.sendOtp({ firstName, lastName, fiscalCode, phone, channel: otpChannel, isRegistration: false });
+                            setOtpSentCode(res.code);
+                            setResendTimer(60);
+                          } catch (e) {}
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🔄 Reinvia codice
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* REGISTRATION RECRUITER PERSONA FISICA */}
               {!isLogin && role === 'COMPANY' && companyType === 'PERSONA_FISICA' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
                   {showOtpScreen ? (
                     <>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: '1.4' }}>
-                        Inserisci il codice OTP inviato all'indirizzo <strong>{email}</strong> ed al numero <strong>{phone}</strong> per completare la registrazione della Persona Fisica.
+                      <div style={{
+                        background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                        border: otpChannel === 'whatsapp' ? '1px solid rgba(37, 211, 102, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <span style={{ fontSize: '1.6rem' }}>{otpChannel === 'whatsapp' ? '💬' : '📧'}</span>
+                        <div style={{ fontSize: '0.84rem', color: '#1e293b', lineHeight: '1.4' }}>
+                          Codice OTP inviato {otpChannel === 'whatsapp' ? 'su WhatsApp al numero' : 'all\'indirizzo email'}:<br />
+                          <strong style={{ color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)', fontSize: '0.94rem' }}>
+                            {otpChannel === 'whatsapp' ? phone : email}
+                          </strong>
+                        </div>
                       </div>
-                      <div style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-purple)', padding: '10px', borderRadius: '8px', fontSize: '0.78rem', border: '1px solid rgba(139,92,246,0.2)' }}>
-                        🔑 Codice OTP di test: <strong>{otpSentCode}</strong>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Codice OTP *</label>
+
+                      {otpSentCode && (
+                        <div style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-purple)', padding: '10px', borderRadius: '8px', fontSize: '0.78rem', border: '1px solid rgba(139,92,246,0.2)' }}>
+                          🔑 Codice OTP di test: <strong>{otpSentCode}</strong>
+                        </div>
+                      )}
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontWeight: 700 }}>Inserisci il codice a 6 cifre *</label>
                         <input 
                           type="text" 
                           className="form-control" 
                           value={otpCode} 
                           onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} 
-                          placeholder="es. 123456"
+                          placeholder="• • • • • •"
+                          style={{
+                            fontSize: '1.3rem',
+                            letterSpacing: '6px',
+                            textAlign: 'center',
+                            fontWeight: 800
+                          }}
+                          autoFocus
                           required 
                         />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                        <button
+                          type="button"
+                          onClick={() => { setShowOtpScreen(false); setOtpCode(''); }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-secondary)',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          ← Modifica dati
+                        </button>
+
+                        {resendTimer > 0 ? (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            Reinvia tra <strong>{resendTimer}s</strong>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await api.auth.sendOtp({ email, phone, firstName, lastName, channel: otpChannel, isRegistration: true });
+                                setOtpSentCode(res.code);
+                                setResendTimer(60);
+                              } catch (e) {}
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: otpChannel === 'whatsapp' ? '#128C7E' : 'var(--accent-blue)',
+                              fontWeight: 700,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🔄 Reinvia codice
+                          </button>
+                        )}
                       </div>
                     </>
                   ) : (
                     <>
+                      {/* Channel Selector for Registration */}
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Canale di ricezione codice OTP:</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setOtpChannel('whatsapp')}
+                            style={{
+                              flex: 1,
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              border: otpChannel === 'whatsapp' ? '2px solid #25D366' : '1px solid #cbd5e1',
+                              background: otpChannel === 'whatsapp' ? 'rgba(37, 211, 102, 0.12)' : '#ffffff',
+                              color: otpChannel === 'whatsapp' ? '#128C7E' : '#475569',
+                              fontWeight: 700,
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <span style={{ fontSize: '1rem' }}>💬</span> WhatsApp (Gratis)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOtpChannel('email')}
+                            style={{
+                              flex: 1,
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              border: otpChannel === 'email' ? '2px solid var(--accent-blue)' : '1px solid #cbd5e1',
+                              background: otpChannel === 'email' ? 'rgba(59, 130, 246, 0.12)' : '#ffffff',
+                              color: otpChannel === 'email' ? 'var(--accent-blue)' : '#475569',
+                              fontWeight: 700,
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <span>📧</span> Email
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="form-control-row" style={{ marginBottom: 0 }}>
                         <div>
                           <label className="form-label">Nome *</label>
@@ -564,12 +829,12 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
                         />
                       </div>
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Numero di Telefono (Cellulare) *</label>
+                        <label className="form-label">Numero di Telefono (Cellulare WhatsApp) *</label>
                         <input 
                           type="tel" 
                           className="form-control" 
                           value={phone} 
-                          onChange={(e) => setPhone(e.target.value.replace(/[^0-9+]/g, ''))} 
+                          onChange={(e) => setPhone(e.target.value)} 
                           placeholder="es. +39 333 1234567"
                           required 
                         />
@@ -771,16 +1036,30 @@ export const Login: React.FC<LoginProps> = ({ initialRole, onLoginSuccess }) => 
               <button 
                 type="submit" 
                 className="btn btn-primary" 
-                style={{ width: '100%', padding: '14px', marginTop: '10px' }}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  marginTop: '10px',
+                  background: (role === 'COMPANY' && companyType === 'PERSONA_FISICA' && !showOtpScreen && otpChannel === 'whatsapp')
+                    ? 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)'
+                    : undefined,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  fontWeight: 700
+                }}
                 disabled={loading}
               >
                 {loading ? 'Elaborazione in corso...' : (
                   isLogin ? (
                     (role === 'COMPANY' && companyType === 'PERSONA_FISICA') ? (
-                      showOtpScreen ? 'Verifica OTP ed Accedi' : 'Invia Codice OTP'
+                      showOtpScreen ? '🔐 Verifica OTP ed Accedi' : (otpChannel === 'whatsapp' ? '💬 Invia Codice su WhatsApp' : '📧 Invia Codice via Email')
                     ) : 'Accedi'
                   ) : (
-                    (role === 'COMPANY' && companyType === 'PERSONA_FISICA' && !showOtpScreen) ? 'Invia OTP per Registrarsi' : 'Completa Registrazione'
+                    (role === 'COMPANY' && companyType === 'PERSONA_FISICA') ? (
+                      showOtpScreen ? '✅ Conferma e Registrati' : (otpChannel === 'whatsapp' ? '💬 Invia Codice su WhatsApp' : '📧 Invia Codice via Email')
+                    ) : 'Completa Registrazione'
                   )
                 )}
               </button>

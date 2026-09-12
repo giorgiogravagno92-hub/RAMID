@@ -172,16 +172,24 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
   }
 
   if (path.startsWith('/auth/send-otp')) {
+    const { email, phone, channel } = body || {};
+    const isWhatsApp = channel === 'whatsapp' || (!email && !!phone);
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem('ramid_last_otp', code);
     return { 
       success: true, 
-      message: 'OTP inviato con successo (Simulato)', 
-      code: '123456',
-      email: body?.email || 'mock-persona-fisica@example.com'
+      channel: isWhatsApp ? 'whatsapp' : 'email',
+      message: isWhatsApp 
+        ? `Codice OTP inviato su WhatsApp al numero ${phone || '+39 333 1234567'}` 
+        : `Codice OTP inviato all'indirizzo email ${email || 'utente@ramid.it'}`, 
+      code,
+      email: email || 'persona-fisica@example.com',
+      phone: phone || '3331234567'
     };
   }
 
   if (path.startsWith('/auth/verify-otp')) {
-    const { email } = body || {};
+    const { email, phone } = body || {};
     const mockUser = {
       id: 'u-otp-comp',
       email: email || 'persona-fisica@example.com',
@@ -193,7 +201,7 @@ const handleMockFallback = (method: string, path: string, body?: any) => {
       companyName: 'Persona Fisica Recruiter',
       firstName: 'Recruiter',
       lastName: 'Fisico',
-      contactPhone: '3331234567',
+      contactPhone: phone || '3331234567',
       industry: 'Persona Fisica'
     });
     return { token: 'mock-jwt-token-1234', user: mockUser };

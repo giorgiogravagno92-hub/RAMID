@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
 import { sendVerificationEmail, sendPasswordResetOtpEmail } from '../utils/mailer';
+import { sendWhatsAppOtp } from '../services/whatsappService';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 // In-memory store for simulated OTPs
@@ -27,7 +28,8 @@ export const register = async (req: Request, res: Response) => {
     // Verify OTP for Persona Fisica recruiter registration
     if (isPersonaFisica) {
       const enteredOtp = profileData?.otpCode;
-      const savedOtpData = otpStore.get(email);
+      const phone = profileData?.contactPhone;
+      const savedOtpData = otpStore.get(email) || (phone ? otpStore.get(phone) : null);
 
       if (!enteredOtp) {
         return res.status(400).json({ error: 'Codice OTP richiesto per completare la registrazione.' });
@@ -39,6 +41,7 @@ export const register = async (req: Request, res: Response) => {
 
       // Clean up OTP
       otpStore.delete(email);
+      if (phone) otpStore.delete(phone);
     } else {
       // Validate password for regular registrations
       const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -51,8 +54,8 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
-    // Enforce PEC email domain check for Company (Azienda or Persona Fisica)
-    if (role === 'COMPANY') {
+    // Enforce PEC email domain check ONLY for registered Companies (not Persona Fisica)
+    if (role === 'COMPANY' && !isPersonaFisica) {
       const emailLower = email.toLowerCase();
       const domain = emailLower.split('@')[1];
       const validPecDomains = new Set([
@@ -570,28 +573,55 @@ export const verifyEmail = async (req: Request, res: Response) => {
 
 export const sendOtp = async (req: Request, res: Response) => {
   try {
-    const { email, phone, isRegistration, firstName, lastName, fiscalCode } = req.body;
+    const { email, phone, channel, isRegistration, firstName, lastName, fiscalCode } = req.body;
+    const isWhatsApp = channel === 'whatsapp' || (!email && !!phone);
 
     if (isRegistration) {
-      if (!email) {
-        return res.status(400).json({ error: 'Indirizzo email obbligatorio per la registrazione.' });
+      const targetIdentifier = email || phone;
+      if (!targetIdentifier) {
+        return res.status(400).json({ error: 'Email o Numero di Telefono richiesto per la registrazione.' });
       }
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expires = Date.now() + 10 * 60 * 1000;
-      otpStore.set(email, { code, expires });
-      console.log(`[SIMULATORE OTP] Codice per ${email}: ${code}`);
-      return res.json({ success: true, code });
+
+      if (email) otpStore.set(email, { code, expires });
+      if (phone) otpStore.set(phone, { code, expires });
+
+      let whatsappResult = null;
+      if (isWhatsApp && phone) {
+        try {
+          whatsappResult = await sendWhatsAppOtp({ phone, code, firstName });
+        } catch (waErr: any) {
+          console.warn('WhatsApp delivery error:', waErr.message);
+        }
+      } else {
+        console.log(`[SIMULATORE OTP EMAIL] Codice per ${email || phone}: ${code}`);
+      }
+
+      return res.json({
+        success: true,
+        code,
+        channel: isWhatsApp ? 'whatsapp' : 'email',
+        message: isWhatsApp 
+          ? `Codice OTP inviato su WhatsApp al numero ${phone}` 
+          : `Codice OTP inviato via Email a ${email}`,
+        formattedPhone: whatsappResult?.formattedPhone || phone
+      });
     }
 
-    // Login flow: find user by email OR by Persona Fisica details
+    // Login flow: find user by email OR by Persona Fisica details / phone
     let user = null;
     let userEmail = email;
+    let userPhone = phone;
 
     if (email) {
       user = await prisma.user.findUnique({
         where: { email },
         include: { companyProfile: true }
       });
+      if (user && (user as any).companyProfile?.contactPhone) {
+        userPhone = (user as any).companyProfile.contactPhone;
+      }
     } else {
       // Find by Persona Fisica details
       if (!firstName || !lastName || !fiscalCode || !phone) {
@@ -627,13 +657,34 @@ export const sendOtp = async (req: Request, res: Response) => {
     const expires = Date.now() + 10 * 60 * 1000;
 
     otpStore.set(userEmail, { code, expires });
-    console.log(`[SIMULATORE OTP] Codice per ${userEmail} (tel: ${phone}): ${code}`);
+    if (userPhone) {
+      otpStore.set(userPhone, { code, expires });
+    }
+
+    let whatsappResult = null;
+    if (isWhatsApp && userPhone) {
+      try {
+        whatsappResult = await sendWhatsAppOtp({ 
+          phone: userPhone, 
+          code, 
+          firstName: (user as any).companyProfile?.firstName || firstName 
+        });
+      } catch (waErr: any) {
+        console.warn('WhatsApp delivery error:', waErr.message);
+      }
+    } else {
+      console.log(`[SIMULATORE OTP] Codice per ${userEmail} (tel: ${userPhone || phone}): ${code}`);
+    }
 
     res.json({
       success: true,
-      message: `Codice OTP inviato (Simulato)`,
+      channel: isWhatsApp ? 'whatsapp' : 'email',
+      message: isWhatsApp 
+        ? `Codice OTP inviato su WhatsApp al numero ${userPhone || phone}`
+        : `Codice OTP inviato all'email ${userEmail}`,
       code,
-      email: userEmail
+      email: userEmail,
+      phone: userPhone
     });
   } catch (error: any) {
     console.error('Error in sendOtp:', error);
@@ -643,26 +694,36 @@ export const sendOtp = async (req: Request, res: Response) => {
 
 export const verifyOtp = async (req: Request, res: Response) => {
   try {
-    const { email, code } = req.body;
+    const { email, phone, code } = req.body;
 
-    if (!email || !code) {
-      return res.status(400).json({ error: 'Email e codice OTP sono richiesti.' });
+    if ((!email && !phone) || !code) {
+      return res.status(400).json({ error: 'Email o Telefono e codice OTP sono richiesti.' });
     }
 
-    const savedOtpData = otpStore.get(email);
+    const savedOtpData = (email ? otpStore.get(email) : null) || (phone ? otpStore.get(phone) : null);
 
     if (!savedOtpData || savedOtpData.code !== code || savedOtpData.expires < Date.now()) {
       return res.status(400).json({ error: 'Codice OTP non valido o scaduto.' });
     }
 
     // OTP is valid, clean up
-    otpStore.delete(email);
+    if (email) otpStore.delete(email);
+    if (phone) otpStore.delete(phone);
 
     // Fetch user
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { companyProfile: true }
-    });
+    let user: any = null;
+    if (email) {
+      user = await prisma.user.findUnique({
+        where: { email },
+        include: { companyProfile: true }
+      });
+    } else if (phone) {
+      const profile = await prisma.companyProfile.findFirst({
+        where: { contactPhone: phone, companyType: 'PERSONA_FISICA' },
+        include: { user: { include: { companyProfile: true } } }
+      });
+      if (profile) user = profile.user;
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'Utente non trovato.' });
